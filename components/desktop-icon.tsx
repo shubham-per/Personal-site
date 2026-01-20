@@ -44,7 +44,7 @@ export default function DesktopIcon({
         {typeof icon === "string" ? (
           <span className="text-2xl">{icon}</span>
         ) : (
-          <div className="text-gray-700">{icon}</div>
+          <div className="text-white">{icon}</div>
         )}
       </div>
       <span className={`${textSize} text-center ${textColorClass} font-medium max-w-16 leading-tight drop-shadow-sm`}>

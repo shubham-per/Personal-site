@@ -1,46 +1,29 @@
-import bcrypt from "bcryptjs"
-import { SignJWT, jwtVerify } from "jose"
-import { cookies } from "next/headers"
+import { NextRequest, NextResponse } from 'next/server';
+import { verify } from 'jsonwebtoken';
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "your-secret-key")
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10)
-}
+export function requireAuth(request: NextRequest) {
+  const token = request.cookies.get('auth-token')?.value;
 
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash)
-}
+  if (!token) {
+    throw new Error('Authentication required');
+  }
 
-export async function createToken(userId: number): Promise<string> {
-  return new SignJWT({ userId }).setProtectedHeader({ alg: "HS256" }).setExpirationTime("24h").sign(JWT_SECRET)
-}
-
-export async function verifyToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload
-  } catch {
-    return null
+    const decoded = verify(token, JWT_SECRET) as any;
+    if (!decoded || !decoded.userId) {
+      throw new Error('Invalid token');
+    }
+    return decoded;
+  } catch (error) {
+    throw new Error('Authentication failed');
   }
 }
 
-export async function getSession() {
-  const cookieStore = cookies()
-  const token = cookieStore.get("auth-token")?.value
-
-  if (!token) return null
-
-  const payload = await verifyToken(token)
-  if (!payload) return null
-
-  return { userId: payload.userId as number }
-}
-
-export async function requireAuth() {
-  const session = await getSession()
-  if (!session) {
-    throw new Error("Unauthorized")
-  }
-  return session
+export function createAuthError() {
+  return NextResponse.json(
+    { error: 'Authentication required' },
+    { status: 401 }
+  );
 }

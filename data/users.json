@@ -1,0 +1,9 @@
+[
+  {
+    "id": 1,
+    "email": "admin@shubham.dev",
+    "passwordHash": "$2b$10$/0OMqbITa047xMyjhMciM.zgkWF9RK1IpI4ARsmvjvZg.vTifGFIi",
+    "role": "admin",
+    "createdAt": "2025-07-10T16:49:54.950Z"
+  }
+]

@@ -1,34 +1,79 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getUserByEmail } from "@/lib/db"
-import { verifyPassword, createToken } from "@/lib/auth"
-import { cookies } from "next/headers"
+import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import { getUserByEmail } from '@/lib/data';
+import { sign } from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json()
+    const { email, password } = await request.json();
 
-    const user = await getUserByEmail(email)
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: 'Email and password are required' },
+        { status: 400 }
+      );
+    }
+
+    // Get user from database
+    const user = await getUserByEmail(email);
+    
     if (!user) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+      return NextResponse.json(
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      );
     }
 
-    const isValid = await verifyPassword(password, user.password_hash)
-    if (!isValid) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    // Check password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    
+    if (!isValidPassword) {
+      return NextResponse.json(
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      );
     }
 
-    const token = await createToken(user.id)
+    // Create JWT token
+    const token = sign(
+      { 
+        userId: user.id, 
+        email: user.email, 
+        role: user.role 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
 
-    const cookieStore = cookies()
-    cookieStore.set("auth-token", token, {
+    // Set HTTP-only cookie
+    const response = NextResponse.json(
+      { 
+        success: true, 
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          role: user.role 
+        } 
+      },
+      { status: 200 }
+    );
+
+    response.cookies.set('auth-token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24, // 24 hours
-    })
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 // 24 hours
+    });
 
-    return NextResponse.json({ success: true })
+    return response;
+
   } catch (error) {
-    return NextResponse.json({ error: "Login failed" }, { status: 500 })
+    console.error('Login error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

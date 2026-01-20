@@ -17,3 +17,19 @@ INSERT INTO users (email, password_hash, role) VALUES
 
 -- Verify the user was created
 SELECT email, role, created_at FROM users WHERE email = 'admin@shubham.dev';
+
+-- Add image_data column if not exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='projects' AND column_name='image_data') THEN
+        ALTER TABLE projects ADD COLUMN image_data BYTEA;
+    END IF;
+END$$;
+
+-- Add card_style column if not exists
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='projects' AND column_name='card_style') THEN
+        ALTER TABLE projects ADD COLUMN card_style VARCHAR(20);
+    END IF;
+END$$;

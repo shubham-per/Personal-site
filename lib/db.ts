@@ -23,12 +23,16 @@ export interface Project {
   title: string
   description: string
   category: "engineering" | "games" | "art"
-  image_url?: string
+  imageUrl?: string
+  photos: string[]
+  keywords: string[]
+  projectLink?: string
   tags: string[]
-  order_index: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
+  orderIndex: number
+  isActive: boolean
+  cardStyle?: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Analytics {
@@ -43,10 +47,71 @@ export interface Analytics {
   timestamp: string
 }
 
+export interface DesktopIcon {
+  id: number
+  icon_type: string
+  icon_name: string
+  label: string
+  window_id: string
+  position_x: number
+  position_y: number
+  is_active: boolean
+  order_index: number
+  created_at: string
+  updated_at: string
+}
+
+export interface HomeIcon {
+  id: number
+  icon_type: string
+  icon_name: string
+  label: string
+  window_id: string
+  color: string
+  size: string
+  is_active: boolean
+  order_index: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Wallpaper {
+  id: number
+  type: 'gradient' | 'image'
+  name: string
+  config: any
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface SocialIcon {
+  id: number
+  platform: string
+  icon_name: string
+  label: string
+  url: string
+  color: string
+  position_x: number
+  position_y: number
+  is_active: boolean
+  order_index: number
+  created_at: string
+  updated_at: string
+}
+
 // Content functions
 export async function getContent(section: string): Promise<Content | null> {
   const result = await sql`SELECT * FROM content WHERE section = ${section} LIMIT 1`
-  return result[0] || null
+  if (!result[0]) return null
+  const row = result[0]
+  return {
+    id: row.id,
+    section: row.section,
+    title: row.title,
+    content: row.content,
+    updated_at: row.updated_at,
+  }
 }
 
 export async function updateContent(section: string, title: string, content: string): Promise<void> {
@@ -61,26 +126,74 @@ export async function updateContent(section: string, title: string, content: str
 // Project functions
 export async function getProjects(category?: string): Promise<Project[]> {
   if (category) {
-    return await sql`
+    const result = await sql`
       SELECT * FROM projects 
       WHERE category = ${category} AND is_active = true 
       ORDER BY order_index ASC, created_at DESC
     `
+    return result.map((row: any) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      category: row.category,
+      imageUrl: row.image_url,
+      photos: row.photos || [],
+      keywords: row.keywords || [],
+      projectLink: row.project_link,
+      tags: row.tags || [],
+      orderIndex: row.order_index,
+      isActive: row.is_active,
+      cardStyle: row.card_style || 'style1',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }))
   }
-  return await sql`
+  const result = await sql`
     SELECT * FROM projects 
     WHERE is_active = true 
     ORDER BY category, order_index ASC, created_at DESC
   `
+  return result.map((row: any) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    imageUrl: row.image_url,
+    photos: row.photos || [],
+    keywords: row.keywords || [],
+    projectLink: row.project_link,
+    tags: row.tags || [],
+    orderIndex: row.order_index,
+    isActive: row.is_active,
+    cardStyle: row.card_style || 'style1',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }))
 }
 
-export async function createProject(project: Omit<Project, "id" | "created_at" | "updated_at">): Promise<Project> {
+export async function createProject(project: Omit<Project, "id" | "createdAt" | "updatedAt">): Promise<Project> {
   const result = await sql`
-    INSERT INTO projects (title, description, category, image_url, tags, order_index, is_active)
-    VALUES (${project.title}, ${project.description}, ${project.category}, ${project.image_url}, ${project.tags}, ${project.order_index}, ${project.is_active})
+    INSERT INTO projects (title, description, category, image_url, photos, keywords, project_link, tags, order_index, is_active, card_style)
+    VALUES (${project.title}, ${project.description}, ${project.category}, ${project.imageUrl}, ${project.photos}, ${project.keywords}, ${project.projectLink}, ${project.tags}, ${project.orderIndex}, ${project.isActive}, ${project.cardStyle || 'style1'})
     RETURNING *
   `
-  return result[0]
+  const row = result[0]
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    category: row.category,
+    imageUrl: row.image_url,
+    photos: row.photos || [],
+    keywords: row.keywords || [],
+    projectLink: row.project_link,
+    tags: row.tags || [],
+    orderIndex: row.order_index,
+    isActive: row.is_active,
+    cardStyle: row.card_style || 'style1',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
 }
 
 export async function updateProject(id: number, project: Partial<Project>): Promise<void> {
@@ -137,5 +250,162 @@ export async function getAnalytics(days = 30) {
 // User functions
 export async function getUserByEmail(email: string): Promise<User | null> {
   const result = await sql`SELECT * FROM users WHERE email = ${email} LIMIT 1`
-  return result[0] || null
+  if (!result[0]) return null
+  const row = result[0]
+  return {
+    id: row.id,
+    email: row.email,
+    password_hash: row.password_hash,
+    role: row.role,
+    created_at: row.created_at,
+  }
+}
+
+// Desktop Icons Management
+export async function getDesktopIcons(): Promise<DesktopIcon[]> {
+  const result = await sql`SELECT * FROM desktop_icons WHERE is_active = true ORDER BY order_index ASC`
+  return result.map((row: any) => ({
+    id: row.id,
+    icon_type: row.icon_type,
+    icon_name: row.icon_name,
+    label: row.label,
+    window_id: row.window_id,
+    position_x: row.position_x,
+    position_y: row.position_y,
+    is_active: row.is_active,
+    order_index: row.order_index,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }))
+}
+
+export async function updateDesktopIcon(id: number, icon: Partial<DesktopIcon>): Promise<void> {
+  const fields = Object.keys(icon).filter((key) => key !== "id" && key !== "created_at")
+  if (fields.length === 0) return
+
+  const setClause = fields.map((field) => `${field} = $${fields.indexOf(field) + 2}`).join(", ")
+  const values = [id, ...fields.map((field) => (icon as any)[field])]
+
+  await sql`UPDATE desktop_icons SET ${sql.unsafe(setClause)}, updated_at = NOW() WHERE id = ${id}`
+}
+
+// Home Icons Management
+export async function getHomeIcons(): Promise<HomeIcon[]> {
+  const result = await sql`SELECT * FROM home_icons WHERE is_active = true ORDER BY order_index ASC`
+  return result.map((row: any) => ({
+    id: row.id,
+    icon_type: row.icon_type,
+    icon_name: row.icon_name,
+    label: row.label,
+    window_id: row.window_id,
+    color: row.color,
+    size: row.size,
+    is_active: row.is_active,
+    order_index: row.order_index,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }))
+}
+
+export async function updateHomeIcon(id: number, icon: Partial<HomeIcon>): Promise<void> {
+  const fields = Object.keys(icon).filter((key) => key !== "id" && key !== "created_at")
+  if (fields.length === 0) return
+
+  const setClause = fields.map((field) => `${field} = $${fields.indexOf(field) + 2}`).join(", ")
+  const values = [id, ...fields.map((field) => (icon as any)[field])]
+
+  await sql`UPDATE home_icons SET ${sql.unsafe(setClause)}, updated_at = NOW() WHERE id = ${id}`
+}
+
+// Wallpaper Management
+export async function getActiveWallpaper(): Promise<Wallpaper | null> {
+  const result = await sql`SELECT * FROM wallpapers WHERE is_active = true LIMIT 1`
+  if (!result[0]) return null
+  const row = result[0]
+  return {
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    config: row.config,
+    is_active: row.is_active,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }
+}
+
+export async function getAllWallpapers(): Promise<Wallpaper[]> {
+  const result = await sql`SELECT * FROM wallpapers ORDER BY created_at DESC`
+  return result.map((row: any) => ({
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    config: row.config,
+    is_active: row.is_active,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }))
+}
+
+export async function createWallpaper(wallpaper: Omit<Wallpaper, "id" | "created_at" | "updated_at">): Promise<Wallpaper> {
+  const result = await sql`
+    INSERT INTO wallpapers (type, name, config, is_active)
+    VALUES (${wallpaper.type}, ${wallpaper.name}, ${JSON.stringify(wallpaper.config)}, ${wallpaper.is_active})
+    RETURNING *
+  `
+  const row = result[0]
+  return {
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    config: row.config,
+    is_active: row.is_active,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }
+}
+
+export async function updateWallpaper(id: number, wallpaper: Partial<Wallpaper>): Promise<void> {
+  const fields = Object.keys(wallpaper).filter((key) => key !== "id" && key !== "created_at")
+  if (fields.length === 0) return
+
+  const setClause = fields.map((field) => `${field} = $${fields.indexOf(field) + 2}`).join(", ")
+  const values = [id, ...fields.map((field) => (wallpaper as any)[field])]
+
+  await sql`UPDATE wallpapers SET ${sql.unsafe(setClause)}, updated_at = NOW() WHERE id = ${id}`
+}
+
+export async function setActiveWallpaper(id: number): Promise<void> {
+  // First, deactivate all wallpapers
+  await sql`UPDATE wallpapers SET is_active = false`
+  // Then activate the selected one
+  await sql`UPDATE wallpapers SET is_active = true, updated_at = NOW() WHERE id = ${id}`
+}
+
+// Social Icons Management
+export async function getSocialIcons(): Promise<SocialIcon[]> {
+  const result = await sql`SELECT * FROM social_icons WHERE is_active = true ORDER BY order_index ASC`
+  return result.map((row: any) => ({
+    id: row.id,
+    platform: row.platform,
+    icon_name: row.icon_name,
+    label: row.label,
+    url: row.url,
+    color: row.color,
+    position_x: row.position_x,
+    position_y: row.position_y,
+    is_active: row.is_active,
+    order_index: row.order_index,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }))
+}
+
+export async function updateSocialIcon(id: number, icon: Partial<SocialIcon>): Promise<void> {
+  const fields = Object.keys(icon).filter((key) => key !== "id" && key !== "created_at")
+  if (fields.length === 0) return
+
+  const setClause = fields.map((field) => `${field} = $${fields.indexOf(field) + 2}`).join(", ")
+  const values = [id, ...fields.map((field) => (icon as any)[field])]
+
+  await sql`UPDATE social_icons SET ${sql.unsafe(setClause)}, updated_at = NOW() WHERE id = ${id}`
 }

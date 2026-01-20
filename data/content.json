@@ -1,0 +1,23 @@
+[
+  {
+    "id": 1,
+    "section": "about",
+    "title": "About Me",
+    "content": "I am a passionate developer who loves creating amazing web experiences. I specialize in modern web technologies and enjoy building projects that make a difference.",
+    "updatedAt": "2025-07-10T16:52:16.619Z"
+  },
+  {
+    "id": 2,
+    "section": "contact",
+    "title": "Discord",
+    "content": "link discord",
+    "updatedAt": "2026-01-19T10:22:28.822Z"
+  },
+  {
+    "id": 3,
+    "section": "faq",
+    "title": "Frequently Asked Questions",
+    "content": "Q: qqqqq\nA: aaaaa",
+    "updatedAt": "2025-12-02T12:45:54.116Z"
+  }
+]

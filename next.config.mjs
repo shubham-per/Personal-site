@@ -1,13 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  output: 'standalone',
+  serverExternalPackages: ['@neondatabase/serverless'],
   images: {
-    unoptimized: true,
+    domains: ['localhost', 'your-domain.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
+  },
+  env: {
+    CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
 }
 

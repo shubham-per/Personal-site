@@ -4,7 +4,64 @@ import { useState, useEffect } from "react"
 import Window from "@/components/window"
 import DesktopIcon from "@/components/desktop-icon"
 import MobileLayout from "@/components/mobile-layout"
-import { Rocket, Gamepad2, Palette, User, Mail, Youtube, MessageCircle, HelpCircle } from "lucide-react"
+import AnalyticsTracker from "@/components/analytics-tracker"
+import { Rocket, Gamepad2, Palette, User, Mail, Youtube, MessageCircle, HelpCircle, FolderOpen } from "lucide-react"
+
+interface Content {
+  id: number
+  section: string
+  title: string
+  content: string
+}
+
+interface Project {
+  id: number
+  title: string
+  description: string
+  category: "engineering" | "games" | "art"
+  imageUrl?: string
+  photos: string[]
+  keywords: string[]
+  projectLink?: string
+  tags: string[]
+  orderIndex: number
+  isActive: boolean
+  cardStyle?: string
+  customTabKey?: string
+}
+
+interface WindowConfig {
+  id: number
+  key: string
+  label: string
+  type: "builtIn" | "custom"
+  showOnDesktop: boolean
+  showInHome: boolean
+  orderDesktop: number
+  orderHome: number
+  isHidden: boolean
+  content?: string
+  icon?: string
+  customIconUrl?: string
+  layout?: "content" | "projects" | "faq"
+}
+
+type BackgroundConfig =
+  | {
+      type: "solid"
+      color: string
+    }
+  | {
+      type: "gradient"
+      from: string
+      via?: string
+      to: string
+    }
+  | {
+      type: "image"
+      imageUrl: string
+      overlay?: boolean
+    }
 
 export default function Page() {
   const [openWindows, setOpenWindows] = useState<string[]>(["home"])
@@ -13,29 +70,81 @@ export default function Page() {
   const [windowZIndex, setWindowZIndex] = useState<Record<string, number>>({})
   const [nextZIndex, setNextZIndex] = useState(100)
   const [isMobile, setIsMobile] = useState(false)
+  
+  const [content, setContent] = useState<Record<string, Content>>({})
+  const [projects, setProjects] = useState<Project[]>([])
+  const [faqItems, setFaqItems] = useState<Array<{ id: number; question: string; answer: string; order: number; isActive: boolean }>>([])
+  const [loading, setLoading] = useState(true)
+  const [background, setBackground] = useState<BackgroundConfig | null>(null)
+  const [windows, setWindows] = useState<WindowConfig[]>([])
 
   useEffect(() => {
-    // Set initial window dimensions and check if mobile
     const updateDimensions = () => {
       setWindowDimensions({
         width: window.innerWidth,
         height: window.innerHeight,
       })
-      setIsMobile(window.innerWidth < 768) // Mobile breakpoint
+      setIsMobile(window.innerWidth < 768)
     }
 
     updateDimensions()
-
-    // Handle window resize
     window.addEventListener("resize", updateDimensions)
     return () => window.removeEventListener("resize", updateDimensions)
+  }, [])
+
+  useEffect(() => {
+    const loadContent = async () => {
+      try {
+        const sections = ["about", "contact", "faq"]
+        const contentData: Record<string, Content> = {}
+
+        for (const section of sections) {
+          const res = await fetch(`/api/content?section=${section}`)
+          const data = await res.json()
+          if (data) contentData[section] = data
+        }
+        setContent(contentData)
+
+        const projectsRes = await fetch("/api/projects")
+        const rawProjects = await projectsRes.json()
+        const projectsData: Project[] = rawProjects.map((p: any) => ({
+          ...p,
+          photos: Array.isArray(p.photos) ? p.photos : [],
+          keywords: Array.isArray(p.keywords) ? p.keywords : [],
+          tags: Array.isArray(p.tags) ? p.tags : [],
+        }))
+        setProjects(projectsData)
+
+        const faqRes = await fetch("/api/faq")
+        const faqData = await faqRes.json()
+        setFaqItems(faqData)
+
+        const bgRes = await fetch("/api/background")
+        if (bgRes.ok) {
+          const bgData = await bgRes.json()
+          setBackground(bgData)
+        }
+
+        const winRes = await fetch("/api/windows")
+        if (winRes.ok) {
+          const winData = await winRes.json()
+          setWindows(winData)
+        }
+
+        setLoading(false)
+      } catch (error) {
+        console.error("Failed to load content:", error)
+        setLoading(false)
+      }
+    }
+
+    loadContent()
   }, [])
 
   const openWindow = (windowId: string) => {
     if (!openWindows.includes(windowId)) {
       setOpenWindows([...openWindows, windowId])
     }
-    // Always bring window to front when opened
     setWindowZIndex((prev) => ({ ...prev, [windowId]: nextZIndex }))
     setNextZIndex((prev) => prev + 1)
     setActiveWindow(windowId)
@@ -43,7 +152,6 @@ export default function Page() {
 
   const closeWindow = (windowId: string) => {
     setOpenWindows(openWindows.filter((id) => id !== windowId))
-    // Remove from z-index tracking
     setWindowZIndex((prev) => {
       const newZIndex = { ...prev }
       delete newZIndex[windowId]
@@ -55,7 +163,6 @@ export default function Page() {
   }
 
   const focusWindow = (windowId: string) => {
-    // Bring window to front
     setWindowZIndex((prev) => ({ ...prev, [windowId]: nextZIndex }))
     setNextZIndex((prev) => prev + 1)
     setActiveWindow(windowId)
@@ -84,770 +191,681 @@ export default function Page() {
     window.open(url, "_blank", "noopener,noreferrer")
   }
 
-  // If mobile, render mobile layout
+  const getProjectsByCategory = (category: "engineering" | "games" | "art") => {
+    return projects.filter(project => project.category === category)
+  }
+
+  const getBackgroundClass = () => {
+    if (!background) {
+      return { style: {} as React.CSSProperties, className: "" }
+    }
+    if (background.type === "solid") {
+      return { style: { backgroundColor: background.color } as React.CSSProperties, className: "" }
+    }
+    if (background.type === "gradient") {
+      const from = background.from || "#60a5fa"
+      const via = background.via || "#3b82f6"
+      const to = background.to || "#2563eb"
+      return {
+        style: {
+          backgroundImage: `linear-gradient(to bottom, ${from}, ${via}, ${to})`,
+        } as React.CSSProperties,
+        className: "",
+      }
+    }
+    return {
+      style: {
+        backgroundImage: `url(${background.imageUrl})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      } as React.CSSProperties,
+      className: "",
+    }
+  }
+
+  const renderIcon = (w: WindowConfig, large = false) => {
+    const size = large ? "w-8 h-8" : "w-6 h-6"
+    
+    if (w.customIconUrl) {
+      return <img src={w.customIconUrl} alt={w.label} className={`${size} object-contain`} />
+    }
+    
+    const icon = (w.icon || "").toLowerCase()
+    if (icon === "user" || w.key === "about") return <User className={`${size} ${large ? "text-blue-600" : ""}`} />
+    if (icon === "rocket" || w.key === "engineering") return <Rocket className={`${size} ${large ? "text-orange-600" : ""}`} />
+    if (icon === "gamepad" || icon === "gamepad2" || w.key === "games") return <Gamepad2 className={`${size} ${large ? "text-green-600" : ""}`} />
+    if (icon === "palette" || w.key === "art") return <Palette className={`${size} ${large ? "text-purple-600" : ""}`} />
+    if (icon === "mail" || w.key === "contact") return <Mail className={`${size} ${large ? "text-cyan-600" : ""}`} />
+    if (icon === "help" || icon === "help-circle" || w.key === "faq") return <HelpCircle className={`${size} ${large ? "text-yellow-600" : ""}`} />
+    return <FolderOpen className={`${size} ${large ? "text-gray-700" : ""}`} />
+  }
+
   if (isMobile) {
     return <MobileLayout />
   }
 
-  // Desktop layout (existing code)
+  if (loading || !background || windows.length === 0) {
+    return (
+      <div className="h-screen w-screen bg-gradient-to-b from-blue-400 via-blue-500 to-blue-600 flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    )
+  }
+
+  const bgProps = getBackgroundClass()
+
   return (
-    <div className="h-screen w-screen bg-gradient-to-b from-blue-400 via-blue-500 to-blue-600 relative overflow-hidden">
-      {/* Windows 7 style background pattern */}
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1)_0%,transparent_50%)]"></div>
-      </div>
-      {/* Desktop Icons */}
-      <div className="absolute top-4 sm:top-6 left-4 sm:left-6 space-y-2 sm:space-y-4">
-        <DesktopIcon
-          icon={<Rocket className="w-6 h-6" />}
-          label="Engineering"
-          onDoubleClick={() => openWindow("engineering")}
-          textColor="white"
-        />
-        <DesktopIcon
-          icon={<Gamepad2 className="w-6 h-6" />}
-          label="Games"
-          onDoubleClick={() => openWindow("games")}
-          textColor="white"
-        />
-        <DesktopIcon
-          icon={<Palette className="w-6 h-6" />}
-          label="Art"
-          onDoubleClick={() => openWindow("art")}
-          textColor="white"
-        />
-      </div>
+    <div>
+      <AnalyticsTracker page="home" />
+      <div className={`h-screen w-screen relative overflow-hidden ${bgProps.className || ""}`} style={bgProps.style}>
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1)_0%,transparent_50%)]"></div>
+        </div>
+        
+        <div className="absolute top-4 sm:top-6 left-4 sm:left-6 space-y-2 sm:space-y-4">
+          {windows
+            .filter((w) => !w.isHidden && w.showOnDesktop)
+            .sort((a, b) => a.orderDesktop - b.orderDesktop)
+            .map((w) => (
+              <DesktopIcon
+                key={w.id}
+                icon={renderIcon(w, false)}
+                label={w.label}
+                onDoubleClick={() => openWindow(w.key)}
+                textColor="white"
+              />
+            ))}
+        </div>
 
-      {/* Social Media Icons */}
-      <div className="absolute bottom-16 sm:bottom-20 right-4 sm:right-6 flex flex-col space-y-2 sm:space-y-4">
-        <DesktopIcon
-          icon={<Youtube className="w-6 h-6 text-red-500" />}
-          label="YouTube"
-          onDoubleClick={() => openExternalLink("https://youtube.com")}
-          textColor="white"
-        />
-        <DesktopIcon
-          icon={<MessageCircle className="w-6 h-6 text-indigo-500" />}
-          label="Discord"
-          onDoubleClick={() => openExternalLink("https://discord.com")}
-          textColor="white"
-        />
-        <DesktopIcon
-          icon={<User className="w-6 h-6 text-blue-600" />}
-          label="LinkedIn"
-          onDoubleClick={() => openExternalLink("https://linkedin.com")}
-          textColor="white"
-        />
-      </div>
+        <div className="absolute bottom-16 sm:bottom-20 right-4 sm:right-6 flex flex-col space-y-2 sm:space-y-4">
+          <DesktopIcon
+            icon={<Youtube className="w-6 h-6 text-red-500" />}
+            label="YouTube"
+            onDoubleClick={() => openExternalLink("https://youtube.com")}
+            textColor="white"
+          />
+          <DesktopIcon
+            icon={<MessageCircle className="w-6 h-6 text-indigo-500" />}
+            label="Discord"
+            onDoubleClick={() => openExternalLink("https://discord.com")}
+            textColor="white"
+          />
+          <DesktopIcon
+            icon={<User className="w-6 h-6 text-blue-600" />}
+            label="LinkedIn"
+            onDoubleClick={() => openExternalLink("https://linkedin.com")}
+            textColor="white"
+          />
+        </div>
 
-      {/* Taskbar */}
-      <div className="absolute bottom-0 left-0 right-0 h-10 sm:h-12 bg-black/30 backdrop-blur-md border-t border-white/20 flex items-center px-2 sm:px-4 space-x-1 sm:space-x-2">
-        <button
-          onClick={() => openWindow("home")}
-          className="bg-white/20 backdrop-blur-sm px-4 py-2 text-sm font-medium border border-white/30 rounded hover:bg-white/30 text-white transition-all duration-200 flex items-center space-x-2"
-        >
-          <div className="w-4 h-4 bg-gradient-to-br from-green-400 to-blue-500 rounded-sm"></div>
-          <span>Start</span>
-        </button>
-        {openWindows.map((windowId) => (
+        <div className="absolute bottom-0 left-0 right-0 h-10 sm:h-12 bg-black/30 backdrop-blur-md border-t border-white/20 flex items-center px-2 sm:px-4 space-x-1 sm:space-x-2">
           <button
-            key={windowId}
-            onClick={() => focusWindow(windowId)}
-            className={`px-4 py-2 text-sm border rounded transition-all duration-200 ${
-              activeWindow === windowId
-                ? "bg-white/30 backdrop-blur-sm border-white/40 text-white"
-                : "bg-white/10 backdrop-blur-sm border-white/20 text-white/80 hover:bg-white/20"
-            }`}
+            onClick={() => openWindow("home")}
+            className="bg-white/20 backdrop-blur-sm px-4 py-2 text-sm font-medium border border-white/30 rounded hover:bg-white/30 text-white transition-all duration-200 flex items-center space-x-2"
           >
-            {windowId}
+            <div className="w-4 h-4 bg-gradient-to-br from-green-400 to-blue-500 rounded-sm"></div>
+            <span>Start</span>
           </button>
-        ))}
-      </div>
+          {openWindows.map((windowId) => (
+            <button
+              key={windowId}
+              onClick={() => focusWindow(windowId)}
+              className={`px-4 py-2 text-sm border rounded transition-all duration-200 ${
+                activeWindow === windowId
+                  ? "bg-white/30 backdrop-blur-sm border-white/40 text-white"
+                  : "bg-white/10 backdrop-blur-sm border-white/20 text-white/80 hover:bg-white/20"
+              }`}
+            >
+              {windowId}
+            </button>
+          ))}
+        </div>
 
-      {/* Windows */}
-      {openWindows.includes("home") && (
-        <Window
-          title="home"
-          isActive={activeWindow === "home"}
-          onClose={() => closeWindow("home")}
-          onFocus={() => focusWindow("home")}
-          initialPosition={getCenteredPosition(getResponsiveSize(600, 500).width, getResponsiveSize(600, 500).height)}
-          width={getResponsiveSize(600, 500).width}
-          height={getResponsiveSize(600, 500).height}
-          zIndex={getWindowZIndex("home")}
-        >
-          <div className="flex flex-col items-center justify-center h-full p-8">
-            <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold text-gray-800 mb-2">
-                hi! i'm <span className="text-blue-600">shubham</span>
-              </h1>
-              <p className="text-gray-600 text-lg">aerospace engineer, game developer, and digital artist</p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4 sm:gap-6">
-              <DesktopIcon
-                icon={<User className="w-8 h-8 text-blue-600" />}
-                label="about"
-                onDoubleClick={() => openWindow("about")}
-                size="large"
-                textColor="dark"
-              />
-              <DesktopIcon
-                icon={<Rocket className="w-8 h-8 text-orange-600" />}
-                label="engineering"
-                onDoubleClick={() => openWindow("engineering")}
-                size="large"
-                textColor="dark"
-              />
-              <DesktopIcon
-                icon={<Gamepad2 className="w-8 h-8 text-green-600" />}
-                label="games"
-                onDoubleClick={() => openWindow("games")}
-                size="large"
-                textColor="dark"
-              />
-              <DesktopIcon
-                icon={<Palette className="w-8 h-8 text-purple-600" />}
-                label="art"
-                onDoubleClick={() => openWindow("art")}
-                size="large"
-                textColor="dark"
-              />
-              <DesktopIcon
-                icon={<Mail className="w-8 h-8 text-cyan-600" />}
-                label="contact"
-                onDoubleClick={() => openWindow("contact")}
-                size="large"
-                textColor="dark"
-              />
-              <DesktopIcon
-                icon={<HelpCircle className="w-8 h-8 text-yellow-600" />}
-                label="faq"
-                onDoubleClick={() => openWindow("faq")}
-                size="large"
-                textColor="dark"
-              />
-            </div>
-          </div>
-        </Window>
-      )}
-
-      {/* All other windows remain the same... */}
-      {openWindows.includes("about") && (
-        <Window
-          title="about - Shubham Ranabhat"
-          isActive={activeWindow === "about"}
-          onClose={() => closeWindow("about")}
-          onFocus={() => focusWindow("about")}
-          initialPosition={getResponsivePosition(350, 150)}
-          width={getResponsiveSize(500, 400).width}
-          height={getResponsiveSize(500, 400).height}
-          zIndex={getWindowZIndex("about")}
-        >
-          <div className="p-6 bg-white h-full overflow-auto">
-            <div className="flex items-center mb-4">
-              <div className="w-16 h-16 bg-gray-300 rounded mr-4 flex items-center justify-center">
-                <User className="w-8 h-8 text-gray-600" />
+        {openWindows.includes("home") && (
+          <Window
+            title="home"
+            isActive={activeWindow === "home"}
+            onClose={() => closeWindow("home")}
+            onFocus={() => focusWindow("home")}
+            initialPosition={getCenteredPosition(getResponsiveSize(600, 500).width, getResponsiveSize(600, 500).height)}
+            width={getResponsiveSize(600, 500).width}
+            height={getResponsiveSize(600, 500).height}
+            zIndex={getWindowZIndex("home")}
+          >
+            <div className="flex flex-col items-center justify-center h-full p-8">
+              <div className="text-center mb-8">
+                <h1 className="text-4xl font-bold text-gray-800 mb-2">
+                  hi! i'm <span className="text-blue-600">shubham</span>
+                </h1>
+                <p className="text-gray-600 text-lg">aerospace engineer, game developer, and digital artist</p>
               </div>
-              <div>
-                <h2 className="text-xl font-bold">Shubham Ranabhat</h2>
-                <p className="text-gray-600">Final Year Aerospace Engineering Student</p>
+              <div className="grid grid-cols-3 gap-4 sm:gap-6">
+                {windows
+                  .filter((w) => !w.isHidden && w.showInHome)
+                  .sort((a, b) => a.orderHome - b.orderHome)
+                  .map((w) => (
+                    <DesktopIcon
+                      key={w.id}
+                      icon={renderIcon(w, true)}
+                      label={w.label}
+                      onDoubleClick={() => openWindow(w.key)}
+                      size="large"
+                      textColor="dark"
+                    />
+                  ))}
               </div>
             </div>
+          </Window>
+        )}
 
-            <div className="space-y-4 text-sm">
-              <p>
-                I'm a final year aerospace engineering student with a passion for pushing boundaries across multiple
-                disciplines. My journey began with a fascination for flight and space exploration, which led me to
-                pursue aerospace engineering.
-              </p>
-
-              <p>
-                Beyond engineering, I've developed strong interests in game development and digital art. I use tools
-                like Blender, Photoshop, and After Effects to bring creative visions to life, while also building
-                interactive experiences through game development.
-              </p>
-
-              <div className="mt-6">
-                <h3 className="font-bold mb-2">Current Focus:</h3>
-                <ul className="list-disc list-inside space-y-1 text-gray-700">
-                  <li>Rocket propulsion systems</li>
-                  <li>Game physics programming</li>
-                  <li>3D modeling and animation</li>
-                  <li>VFX and motion graphics</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </Window>
-      )}
-
-      {openWindows.includes("faq") && (
-        <Window
-          title="faq - Frequently Asked Questions"
-          isActive={activeWindow === "faq"}
-          onClose={() => closeWindow("faq")}
-          onFocus={() => focusWindow("faq")}
-          initialPosition={getResponsivePosition(600, 400)}
-          width={getResponsiveSize(500, 400).width}
-          height={getResponsiveSize(500, 400).height}
-          zIndex={getWindowZIndex("faq")}
-        >
-          <div className="p-6 bg-white h-full overflow-auto">
-            <div className="flex items-center mb-6">
-              <HelpCircle className="w-8 h-8 text-yellow-600 mr-3" />
-              <h2 className="text-2xl font-bold">Frequently Asked Questions</h2>
-            </div>
-
-            <div className="space-y-6">
-              <div className="border-l-4 border-yellow-500 pl-4">
-                <h3 className="font-bold text-lg mb-2">What do you specialize in?</h3>
-                <p className="text-sm text-gray-700">
-                  I specialize in aerospace engineering, game development, and digital art. My focus areas include
-                  rocket propulsion, flight control systems, and 3D modeling.
-                </p>
-              </div>
-
-              <div className="border-l-4 border-green-500 pl-4">
-                <h3 className="font-bold text-lg mb-2">Are you available for projects?</h3>
-                <p className="text-sm text-gray-700">
-                  Yes! I'm currently available for aerospace engineering internships, game development collaborations,
-                  and 3D modeling projects.
-                </p>
-              </div>
-
-              <div className="border-l-4 border-blue-500 pl-4">
-                <h3 className="font-bold text-lg mb-2">What tools do you use?</h3>
-                <p className="text-sm text-gray-700">
-                  I use Blender for 3D modeling, Unity and Unreal for game development, and various CAD tools for
-                  engineering design. For VFX, I work with After Effects and Photoshop.
-                </p>
-              </div>
-
-              <div className="border-l-4 border-purple-500 pl-4">
-                <h3 className="font-bold text-lg mb-2">How can I contact you?</h3>
-                <p className="text-sm text-gray-700">
-                  You can reach me through email, LinkedIn, or GitHub. I'm always open to discussing new opportunities
-                  and collaborations in aerospace engineering, game development, or digital art.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Window>
-      )}
-
-      {/* Engineering Window */}
-      {openWindows.includes("engineering") && (
-        <Window
-          title="engineering - Projects"
-          isActive={activeWindow === "engineering"}
-          onClose={() => closeWindow("engineering")}
-          onFocus={() => focusWindow("engineering")}
-          initialPosition={getResponsivePosition(200, 100)}
-          width={getResponsiveSize(600, 500).width}
-          height={getResponsiveSize(600, 500).height}
-          zIndex={getWindowZIndex("engineering")}
-        >
-          <div className="p-6 bg-white h-full overflow-auto">
-            <div className="flex items-center mb-6">
-              <Rocket className="w-8 h-8 text-orange-600 mr-3" />
-              <h2 className="text-2xl font-bold text-gray-800">Engineering Projects</h2>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6">
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h4 className="font-bold text-lg mb-2 text-gray-800">Liquid Rocket Engine</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                  Bipropellant rocket engine development with thrust vectoring capabilities and real-time monitoring
-                  systems.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded">Propulsion</span>
-                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">CAD</span>
-                  <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Testing</span>
+        {openWindows.includes("about") && (
+          <Window
+            title="about - Shubham Ranabhat"
+            isActive={activeWindow === "about"}
+            onClose={() => closeWindow("about")}
+            onFocus={() => focusWindow("about")}
+            initialPosition={getResponsivePosition(350, 150)}
+            width={getResponsiveSize(500, 400).width}
+            height={getResponsiveSize(500, 400).height}
+            zIndex={getWindowZIndex("about")}
+          >
+            <div className="p-6 bg-white h-full overflow-auto">
+              <div className="flex items-center mb-4">
+                <div className="w-16 h-16 bg-gray-300 rounded mr-4 flex items-center justify-center">
+                  <User className="w-8 h-8 text-gray-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">{content.about?.title || "About Me"}</h2>
+                  <p className="text-gray-600">Final Year Aerospace Engineering Student</p>
                 </div>
               </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h4 className="font-bold text-lg mb-2 text-gray-800">Flight Computer for Rockets</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                  Autonomous flight control system with real-time telemetry and data logging capabilities.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">Electronics</span>
-                  <span className="bg-cyan-100 text-cyan-800 text-xs px-2 py-1 rounded">Programming</span>
-                  <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">Control Systems</span>
-                </div>
+              <div className="space-y-4 text-sm">
+                {content.about ? (
+                  <div dangerouslySetInnerHTML={{ __html: content.about.content.replace(/\n/g, '<br/>') }} />
+                ) : (
+                  <div className="text-gray-500 italic">Loading content...</div>
+                )}
               </div>
+            </div>
+          </Window>
+        )}
 
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h4 className="font-bold text-lg mb-2 text-gray-800">Thrust Vectoring Model</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                  Active flight control demonstration using servo-controlled nozzles for stability and maneuverability.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded">Control Systems</span>
-                  <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">Mechanics</span>
-                  <span className="bg-pink-100 text-pink-800 text-xs px-2 py-1 rounded">3D Printing</span>
-                </div>
+        {openWindows.includes("faq") && (
+          <Window
+            title="faq - Frequently Asked Questions"
+            isActive={activeWindow === "faq"}
+            onClose={() => closeWindow("faq")}
+            onFocus={() => focusWindow("faq")}
+            initialPosition={getResponsivePosition(600, 400)}
+            width={getResponsiveSize(500, 400).width}
+            height={getResponsiveSize(500, 400).height}
+            zIndex={getWindowZIndex("faq")}
+          >
+            <div className="p-6 bg-white h-full overflow-auto">
+              <div className="flex items-center mb-6">
+                <HelpCircle className="w-8 h-8 text-yellow-600 mr-3" />
+                <h2 className="text-2xl font-bold">{content.faq?.title || "FAQ"}</h2>
               </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h4 className="font-bold text-lg mb-2 text-gray-800">HALE UAV Design</h4>
-                <p className="text-sm text-gray-600 mb-3">
-                  High Altitude Long Endurance aircraft design and aerodynamic analysis for extended flight missions.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-teal-100 text-teal-800 text-xs px-2 py-1 rounded">Aerodynamics</span>
-                  <span className="bg-lime-100 text-lime-800 text-xs px-2 py-1 rounded">Design</span>
-                  <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">Analysis</span>
-                </div>
+              <div className="space-y-6">
+                {faqItems.filter((item) => !item.customTabKey).length > 0 ? (
+                  faqItems.filter((item) => !item.customTabKey).map((item) => (
+                    <div key={item.id} className="border-b border-gray-200 pb-4 last:border-0">
+                      <h3 className="font-bold text-lg mb-2 text-gray-800">{item.question}</h3>
+                      <p className="text-sm text-gray-600 whitespace-pre-wrap">{item.answer}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-gray-500 italic">No FAQ items available.</div>
+                )}
               </div>
+            </div>
+          </Window>
+        )}
 
-              <div className="col-span-full mt-8 space-y-4">
-                <button
-                  onClick={() => openWindow("shit-projects")}
-                  className="w-full bg-red-50 border-2 border-red-200 rounded-lg p-6 hover:shadow-lg transition-all duration-300 hover:bg-red-100"
-                >
-                  <div className="flex items-center mb-4">
-                    <span className="text-2xl mr-3">💩</span>
-                    <h4 className="font-bold text-xl text-red-700">SHIT Projects Collection</h4>
+        {openWindows.includes("contact") && (
+          <Window
+            title="contact - Get In Touch"
+            isActive={activeWindow === "contact"}
+            onClose={() => closeWindow("contact")}
+            onFocus={() => focusWindow("contact")}
+            initialPosition={getResponsivePosition(450, 300)}
+            width={getResponsiveSize(500, 400).width}
+            height={getResponsiveSize(500, 400).height}
+            zIndex={getWindowZIndex("contact")}
+          >
+            <div className="p-6 bg-white h-full overflow-auto">
+              <div className="flex items-center mb-6">
+                <Mail className="w-8 h-8 text-cyan-600 mr-3" />
+                <h2 className="text-2xl font-bold">{content.contact?.title || "Contact"}</h2>
+              </div>
+              <div className="space-y-4 text-sm">
+                {content.contact ? (
+                  <div dangerouslySetInnerHTML={{ __html: content.contact.content.replace(/\n/g, '<br/>') }} />
+                ) : (
+                  <div className="text-gray-500 italic">Loading content...</div>
+                )}
+              </div>
+            </div>
+          </Window>
+        )}
+
+        {openWindows.includes("engineering") && (
+          <Window
+            title="engineering - Projects"
+            isActive={activeWindow === "engineering"}
+            onClose={() => closeWindow("engineering")}
+            onFocus={() => focusWindow("engineering")}
+            initialPosition={getResponsivePosition(200, 100)}
+            width={getResponsiveSize(600, 500).width}
+            height={getResponsiveSize(600, 500).height}
+            zIndex={getWindowZIndex("engineering")}
+          >
+            <div className="p-6 bg-white h-full overflow-auto">
+              <div className="flex items-center mb-6">
+                <Rocket className="w-8 h-8 text-orange-600 mr-3" />
+                <h2 className="text-2xl font-bold text-gray-800">Engineering Projects</h2>
+              </div>
+              <div className="grid grid-cols-1 gap-6">
+                {getProjectsByCategory("engineering").map((project) => (
+                  <div key={project.id} className="bg-white/50 backdrop-blur-sm border border-white/30 rounded-lg p-4 mb-4">
+                    <div className="flex gap-4">
+                      <div className="w-32 h-32 flex-shrink-0">
+                        <img 
+                          src={project.imageUrl || "/placeholder.jpg"} 
+                          alt={project.title}
+                          className="w-full h-full object-cover rounded border"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-lg mb-2 text-gray-800">{project.title}</h4>
+                        <p className="text-sm text-gray-600 mb-3">{project.description}</p>
+                        {project.projectLink && (
+                          <div className="mb-3">
+                            <a 
+                              href={project.projectLink} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 text-sm underline"
+                            >
+                              🔗 View Project
+                            </a>
+                          </div>
+                        )}
+                        {project.keywords && project.keywords.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-xs text-gray-500 mb-1">Keywords:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {project.keywords.map((keyword, index) => (
+                                <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                                  {keyword}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {project.tags.map((tag, index) => (
+                            <span key={index} className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {project.photos && project.photos.length > 0 && (
+                        <div className="w-32 space-y-2">
+                          <p className="text-xs text-gray-500">Photos:</p>
+                          <div className="space-y-2">
+                            {project.photos.slice(0, 3).map((photo, index) => (
+                              <img 
+                                key={index} 
+                                src={photo} 
+                                alt={`${project.title} photo ${index + 1}`}
+                                className="w-full h-20 object-cover rounded border"
+                              />
+                            ))}
+                            {project.photos.length > 3 && (
+                              <div className="text-xs text-gray-500 text-center">
+                                +{project.photos.length - 3} more
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-red-600 text-sm text-left">
-                    Click to view the most cursed engineering projects...
-                  </p>
-                </button>
+                ))}
+              </div>
+            </div>
+          </Window>
+        )}
 
-                <button
-                  onClick={() => openWindow("trash-projects")}
-                  className="w-full bg-gray-50 border-2 border-gray-300 rounded-lg p-6 hover:shadow-lg transition-all duration-300 hover:bg-gray-100"
-                >
-                  <div className="flex items-center mb-4">
-                    <span className="text-2xl mr-3">🗑️</span>
-                    <h4 className="font-bold text-xl text-gray-700">Absolute Trash Collection</h4>
+        {openWindows.includes("games") && (
+          <Window
+            title="games - Projects"
+            isActive={activeWindow === "games"}
+            onClose={() => closeWindow("games")}
+            onFocus={() => focusWindow("games")}
+            initialPosition={getResponsivePosition(300, 200)}
+            width={getResponsiveSize(600, 500).width}
+            height={getResponsiveSize(600, 500).height}
+            zIndex={getWindowZIndex("games")}
+          >
+            <div className="p-6 bg-white h-full overflow-auto">
+              <div className="flex items-center mb-6">
+                <Gamepad2 className="w-8 h-8 text-green-600 mr-3" />
+                <h2 className="text-2xl font-bold text-gray-800">Game Projects</h2>
+              </div>
+              <div className="grid grid-cols-1 gap-6">
+                {getProjectsByCategory("games").map((project) => (
+                  <div key={project.id} className="bg-white/50 backdrop-blur-sm border border-white/30 rounded-lg p-4 mb-4">
+                    <div className="flex gap-4">
+                      <div className="w-32 h-32 flex-shrink-0">
+                        <img 
+                          src={project.imageUrl || "/placeholder.jpg"} 
+                          alt={project.title}
+                          className="w-full h-full object-cover rounded border"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-lg mb-2 text-gray-800">{project.title}</h4>
+                        <p className="text-sm text-gray-600 mb-3">{project.description}</p>
+                        {project.projectLink && (
+                          <div className="mb-3">
+                            <a 
+                              href={project.projectLink} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 text-sm underline"
+                            >
+                              🔗 View Project
+                            </a>
+                          </div>
+                        )}
+                        {project.keywords && project.keywords.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-xs text-gray-500 mb-1">Keywords:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {project.keywords.map((keyword, index) => (
+                                <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                                  {keyword}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {project.tags.map((tag, index) => (
+                            <span key={index} className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {project.photos && project.photos.length > 0 && (
+                        <div className="w-32 space-y-2">
+                          <p className="text-xs text-gray-500">Photos:</p>
+                          <div className="space-y-2">
+                            {project.photos.slice(0, 3).map((photo, index) => (
+                              <img 
+                                key={index} 
+                                src={photo} 
+                                alt={`${project.title} photo ${index + 1}`}
+                                className="w-full h-20 object-cover rounded border"
+                              />
+                            ))}
+                            {project.photos.length > 3 && (
+                              <div className="text-xs text-gray-500 text-center">
+                                +{project.photos.length - 3} more
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-gray-600 text-sm text-left">
-                    Academic requirement projects (click to view the suffering)...
-                  </p>
-                </button>
+                ))}
               </div>
             </div>
-          </div>
-        </Window>
-      )}
+          </Window>
+        )}
 
-      {/* Games Window */}
-      {openWindows.includes("games") && (
-        <Window
-          title="games - Development"
-          isActive={activeWindow === "games"}
-          onClose={() => closeWindow("games")}
-          onFocus={() => focusWindow("games")}
-          initialPosition={getResponsivePosition(250, 150)}
-          width={getResponsiveSize(600, 500).width}
-          height={getResponsiveSize(600, 500).height}
-          zIndex={getWindowZIndex("games")}
-        >
-          <div className="p-6 bg-white h-full overflow-auto">
-            <div className="flex items-center mb-6">
-              <Gamepad2 className="w-8 h-8 text-green-600 mr-3" />
-              <h2 className="text-2xl font-bold text-gray-800">Game Development</h2>
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                <div className="flex items-center mb-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center mr-4">
-                    <span className="text-white text-2xl">🚀</span>
+        {openWindows.includes("art") && (
+          <Window
+            title="art - Projects"
+            isActive={activeWindow === "art"}
+            onClose={() => closeWindow("art")}
+            onFocus={() => focusWindow("art")}
+            initialPosition={getResponsivePosition(400, 250)}
+            width={getResponsiveSize(600, 500).width}
+            height={getResponsiveSize(600, 500).height}
+            zIndex={getWindowZIndex("art")}
+          >
+            <div className="p-6 bg-white h-full overflow-auto">
+              <div className="flex items-center mb-6">
+                <Palette className="w-8 h-8 text-purple-600 mr-3" />
+                <h2 className="text-2xl font-bold text-gray-800">Art Projects</h2>
+              </div>
+              <div className="grid grid-cols-1 gap-6">
+                {getProjectsByCategory("art").map((project) => (
+                  <div key={project.id} className="bg-white/50 backdrop-blur-sm border border-white/30 rounded-lg p-4 mb-4">
+                    <div className="flex gap-4">
+                      <div className="w-32 h-32 flex-shrink-0">
+                        <img 
+                          src={project.imageUrl || "/placeholder.jpg"} 
+                          alt={project.title}
+                          className="w-full h-full object-cover rounded border"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-lg mb-2 text-gray-800">{project.title}</h4>
+                        <p className="text-sm text-gray-600 mb-3">{project.description}</p>
+                        {project.projectLink && (
+                          <div className="mb-3">
+                            <a 
+                              href={project.projectLink} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 text-sm underline"
+                            >
+                              🔗 View Project
+                            </a>
+                          </div>
+                        )}
+                        {project.keywords && project.keywords.length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-xs text-gray-500 mb-1">Keywords:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {project.keywords.map((keyword, index) => (
+                                <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                                  {keyword}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {project.tags.map((tag, index) => (
+                            <span key={index} className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {project.photos && project.photos.length > 0 && (
+                        <div className="w-32 space-y-2">
+                          <p className="text-xs text-gray-500">Photos:</p>
+                          <div className="space-y-2">
+                            {project.photos.slice(0, 3).map((photo, index) => (
+                              <img 
+                                key={index} 
+                                src={photo} 
+                                alt={`${project.title} photo ${index + 1}`}
+                                className="w-full h-20 object-cover rounded border"
+                              />
+                            ))}
+                            {project.photos.length > 3 && (
+                              <div className="text-xs text-gray-500 text-center">
+                                +{project.photos.length - 3} more
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-xl text-gray-800">Space Explorer</h4>
-                    <p className="text-gray-600">3D Space Exploration Game</p>
+                ))}
+              </div>
+            </div>
+          </Window>
+        )}
+
+        {windows
+          .filter((w) => w.type === "custom")
+          .map((w) =>
+            openWindows.includes(w.key) ? (
+              <Window
+                key={w.key}
+                title={w.label}
+                isActive={activeWindow === w.key}
+                onClose={() => closeWindow(w.key)}
+                onFocus={() => focusWindow(w.key)}
+                initialPosition={getResponsivePosition(300, 200)}
+                width={getResponsiveSize(w.layout === "projects" ? 600 : 500, w.layout === "projects" ? 500 : 400).width}
+                height={getResponsiveSize(w.layout === "projects" ? 600 : 500, w.layout === "projects" ? 500 : 400).height}
+                zIndex={getWindowZIndex(w.key)}
+              >
+                {w.layout === "projects" ? (
+                  <div className="p-6 bg-white h-full overflow-auto">
+                    <div className="flex items-center mb-6">
+                      {w.customIconUrl ? (
+                        <img src={w.customIconUrl} alt={w.label} className="w-8 h-8 mr-3 object-contain" />
+                      ) : (
+                        renderIcon(w, true)
+                      )}
+                      <h2 className="text-2xl font-bold text-gray-800">{w.label}</h2>
+                    </div>
+                    <div className="grid grid-cols-1 gap-6">
+                      {projects
+                        .filter((p) => p.isActive && p.customTabKey === w.key)
+                        .sort((a, b) => a.orderIndex - b.orderIndex)
+                        .map((project) => (
+                          <div key={project.id} className="bg-white/50 backdrop-blur-sm border border-white/30 rounded-lg p-4 mb-4">
+                            <div className="flex gap-4">
+                              <div className="w-32 h-32 flex-shrink-0">
+                                <img 
+                                  src={project.imageUrl || "/placeholder.jpg"} 
+                                  alt={project.title}
+                                  className="w-full h-full object-cover rounded border"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="font-bold text-lg mb-2 text-gray-800">{project.title}</h4>
+                                <p className="text-sm text-gray-600 mb-3">{project.description}</p>
+                                {project.projectLink && (
+                                  <div className="mb-3">
+                                    <a 
+                                      href={project.projectLink} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:text-blue-800 text-sm underline"
+                                    >
+                                      🔗 View Project
+                                    </a>
+                                  </div>
+                                )}
+                                {project.keywords && project.keywords.length > 0 && (
+                                  <div className="mb-3">
+                                    <p className="text-xs text-gray-500 mb-1">Keywords:</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {project.keywords.map((keyword, index) => (
+                                        <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                                          {keyword}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="flex flex-wrap gap-2">
+                                  {project.tags.map((tag, index) => (
+                                    <span key={index} className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                              {project.photos && project.photos.length > 0 && (
+                                <div className="w-32 space-y-2">
+                                  <p className="text-xs text-gray-500">Photos:</p>
+                                  <div className="space-y-2">
+                                    {project.photos.slice(0, 3).map((photo, index) => (
+                                      <img 
+                                        key={index} 
+                                        src={photo} 
+                                        alt={`${project.title} photo ${index + 1}`}
+                                        className="w-full h-20 object-cover rounded border"
+                                      />
+                                    ))}
+                                    {project.photos.length > 3 && (
+                                      <div className="text-xs text-gray-500 text-center">
+                                        +{project.photos.length - 3} more
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      {projects.filter((p) => p.isActive && p.customTabKey === w.key).length === 0 && (
+                        <div className="text-gray-500 italic">No projects available.</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <p className="text-sm text-gray-600 mb-4">
-                  A 3D space exploration game featuring realistic physics, procedurally generated planets, and immersive
-                  spacecraft mechanics. Players can explore vast solar systems and discover unique worlds.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">Unity</span>
-                  <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">C#</span>
-                  <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Procedural Generation</span>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-                <div className="flex items-center mb-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-blue-600 rounded-lg flex items-center justify-center mr-4">
-                    <span className="text-white text-2xl">🌍</span>
+                ) : w.layout === "faq" ? (
+                  <div className="p-6 bg-white h-full overflow-auto">
+                    <div className="flex items-center mb-6">
+                      {w.customIconUrl ? (
+                        <img src={w.customIconUrl} alt={w.label} className="w-8 h-8 mr-3 object-contain" />
+                      ) : (
+                        renderIcon(w, true)
+                      )}
+                      <h2 className="text-2xl font-bold text-gray-800">{w.label}</h2>
+                    </div>
+                    <div className="space-y-6">
+                      {faqItems.filter((item) => item.customTabKey === w.key).length > 0 ? (
+                        faqItems.filter((item) => item.customTabKey === w.key).map((item) => (
+                          <div key={item.id} className="border-b border-gray-200 pb-4 last:border-0">
+                            <h3 className="font-bold text-lg mb-2 text-gray-800">{item.question}</h3>
+                            <p className="text-sm text-gray-600 whitespace-pre-wrap">{item.answer}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-gray-500 italic">No FAQ items available.</div>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-xl text-gray-800">Orbital Mechanics Simulator</h4>
-                    <p className="text-gray-600">Educational Physics Game</p>
+                ) : (
+                  <div className="p-6 bg-white h-full overflow-auto">
+                    <div className="flex items-center mb-6">
+                      {w.customIconUrl ? (
+                        <img src={w.customIconUrl} alt={w.label} className="w-8 h-8 mr-3 object-contain" />
+                      ) : (
+                        renderIcon(w, true)
+                      )}
+                      <h2 className="text-2xl font-bold text-gray-800">{w.label}</h2>
+                    </div>
+                    <div className="text-sm text-gray-700 space-y-3">
+                      {w.content ? (
+                        <div dangerouslySetInnerHTML={{ __html: w.content.replace(/\n/g, "<br/>") }} />
+                      ) : (
+                        <p className="italic text-gray-500">No content set yet for this window.</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <p className="text-sm text-gray-600 mb-4">
-                  An educational game that teaches orbital mechanics through interactive puzzles and simulations.
-                  Perfect for students learning about space physics and satellite dynamics.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-cyan-100 text-cyan-800 text-xs px-2 py-1 rounded">Physics</span>
-                  <span className="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded">Education</span>
-                  <span className="bg-teal-100 text-teal-800 text-xs px-2 py-1 rounded">Simulation</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Window>
-      )}
-
-      {/* Art Window */}
-      {openWindows.includes("art") && (
-        <Window
-          title="art - Digital Art & VFX"
-          isActive={activeWindow === "art"}
-          onClose={() => closeWindow("art")}
-          onFocus={() => focusWindow("art")}
-          initialPosition={getResponsivePosition(300, 200)}
-          width={getResponsiveSize(600, 500).width}
-          height={getResponsiveSize(600, 500).height}
-          zIndex={getWindowZIndex("art")}
-        >
-          <div className="p-6 bg-white h-full overflow-auto">
-            <div className="flex items-center mb-6">
-              <Palette className="w-8 h-8 text-purple-600 mr-3" />
-              <h2 className="text-2xl font-bold text-gray-800">Digital Art & VFX</h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
-                <div className="w-full h-32 bg-gradient-to-br from-blue-400 to-purple-600 flex items-center justify-center">
-                  <span className="text-white text-4xl">🚀</span>
-                </div>
-                <div className="p-4">
-                  <h4 className="font-bold text-lg mb-2 text-gray-800">Space Station Concept</h4>
-                  <p className="text-sm text-gray-600 mb-3">
-                    3D model and animation of a futuristic space station with detailed interior and exterior designs.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">Blender</span>
-                    <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">3D Modeling</span>
-                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Animation</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
-                <div className="w-full h-32 bg-gradient-to-br from-orange-400 to-red-600 flex items-center justify-center">
-                  <span className="text-white text-4xl">🔥</span>
-                </div>
-                <div className="p-4">
-                  <h4 className="font-bold text-lg mb-2 text-gray-800">Rocket Launch Animation</h4>
-                  <p className="text-sm text-gray-600 mb-3">
-                    VFX sequence showing realistic rocket launch with particle effects and atmospheric dynamics.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded">After Effects</span>
-                    <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">VFX</span>
-                    <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">Motion Graphics</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
-                <div className="w-full h-32 bg-gradient-to-br from-green-400 to-blue-600 flex items-center justify-center">
-                  <span className="text-white text-4xl">🌌</span>
-                </div>
-                <div className="p-4">
-                  <h4 className="font-bold text-lg mb-2 text-gray-800">Sci-Fi Environment</h4>
-                  <p className="text-sm text-gray-600 mb-3">
-                    Detailed 3D environment with atmospheric lighting and futuristic architectural elements.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">Blender</span>
-                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">Lighting</span>
-                    <span className="bg-teal-100 text-teal-800 text-xs px-2 py-1 rounded">Texturing</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
-                <div className="w-full h-32 bg-gradient-to-br from-pink-400 to-purple-600 flex items-center justify-center">
-                  <span className="text-white text-4xl">⚡</span>
-                </div>
-                <div className="p-4">
-                  <h4 className="font-bold text-lg mb-2 text-gray-800">Technical Animations</h4>
-                  <p className="text-sm text-gray-600 mb-3">
-                    Educational animations explaining complex aerospace concepts and engineering principles.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="bg-pink-100 text-pink-800 text-xs px-2 py-1 rounded">Animation</span>
-                    <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">Education</span>
-                    <span className="bg-indigo-100 text-indigo-800 text-xs px-2 py-1 rounded">Technical</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Window>
-      )}
-
-      {/* Contact Window */}
-      {openWindows.includes("contact") && (
-        <Window
-          title="contact - Get in Touch"
-          isActive={activeWindow === "contact"}
-          onClose={() => closeWindow("contact")}
-          onFocus={() => focusWindow("contact")}
-          initialPosition={getResponsivePosition(400, 250)}
-          width={getResponsiveSize(500, 400).width}
-          height={getResponsiveSize(500, 400).height}
-          zIndex={getWindowZIndex("contact")}
-        >
-          <div className="p-6 bg-white h-full overflow-auto">
-            <div className="flex items-center mb-6">
-              <Mail className="w-8 h-8 text-cyan-600 mr-3" />
-              <h2 className="text-2xl font-bold text-gray-800">Get in Touch</h2>
-            </div>
-
-            <div className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h4 className="font-medium text-gray-800 mb-2 flex items-center">
-                  <span className="text-xl mr-2">📧</span>
-                  Email
-                </h4>
-                <p className="text-gray-600">shubham.ranabhat@example.com</p>
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h4 className="font-medium text-gray-800 mb-2 flex items-center">
-                  <span className="text-xl mr-2">💼</span>
-                  LinkedIn
-                </h4>
-                <p className="text-gray-600">linkedin.com/in/shubham-ranabhat</p>
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h4 className="font-medium text-gray-800 mb-2 flex items-center">
-                  <span className="text-xl mr-2">🐙</span>
-                  GitHub
-                </h4>
-                <p className="text-gray-600">github.com/shubham-ranabhat</p>
-              </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h4 className="font-medium text-gray-800 mb-3 flex items-center">
-                  <span className="text-xl mr-2">🎯</span>
-                  Currently Available For
-                </h4>
-                <ul className="text-gray-600 space-y-2">
-                  <li className="flex items-center">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-3"></span>
-                    Aerospace Engineering Internships
-                  </li>
-                  <li className="flex items-center">
-                    <span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
-                    Game Development Collaborations
-                  </li>
-                  <li className="flex items-center">
-                    <span className="w-2 h-2 bg-purple-500 rounded-full mr-3"></span>
-                    3D Modeling & Animation Projects
-                  </li>
-                  <li className="flex items-center">
-                    <span className="w-2 h-2 bg-orange-500 rounded-full mr-3"></span>
-                    Research Opportunities
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </Window>
-      )}
-
-      {/* SHIT Projects Window */}
-      {openWindows.includes("shit-projects") && (
-        <Window
-          title="💩 SHIT Projects Collection"
-          isActive={activeWindow === "shit-projects"}
-          onClose={() => closeWindow("shit-projects")}
-          onFocus={() => focusWindow("shit-projects")}
-          initialPosition={getResponsivePosition(150, 50)}
-          width={getResponsiveSize(700, 600).width}
-          height={getResponsiveSize(700, 600).height}
-          zIndex={getWindowZIndex("shit-projects")}
-        >
-          <div className="p-6 bg-white h-full overflow-auto">
-            <div className="flex items-center mb-6">
-              <span className="text-3xl mr-3">💩</span>
-              <h2 className="text-2xl font-bold text-red-700">The Most Cursed Engineering Projects</h2>
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-red-50 p-6 rounded-lg border border-red-200">
-                <h4 className="font-bold text-xl mb-3 text-gray-800">CFD of Toilet Flush</h4>
-                <p className="text-lg text-gray-600 mb-3">Fluid dynamics analysis of bathroom fixtures</p>
-                <p className="text-sm text-gray-700 mb-4">
-                  Comprehensive computational fluid dynamics analysis of toilet flushing mechanisms. Studied vortex
-                  formation, flow patterns, and optimization of water usage efficiency. This project involved detailed
-                  mesh generation, turbulence modeling, and validation against experimental data. Yes, this actually
-                  happened, and yes, I had to present it to a room full of professors with straight faces.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded">CFD</span>
-                  <span className="bg-cyan-100 text-cyan-800 text-sm px-3 py-1 rounded">Fluid Mechanics</span>
-                  <span className="bg-red-100 text-red-800 text-sm px-3 py-1 rounded">Cursed</span>
-                  <span className="bg-yellow-100 text-yellow-800 text-sm px-3 py-1 rounded">ANSYS Fluent</span>
-                </div>
-              </div>
-
-              <div className="bg-red-50 p-6 rounded-lg border border-red-200">
-                <h4 className="font-bold text-xl mb-3 text-gray-800">Fart Simulation</h4>
-                <p className="text-lg text-gray-600 mb-3">Aerodynamic analysis of biological gas expulsion</p>
-                <p className="text-sm text-gray-700 mb-4">
-                  Mathematical modeling and simulation of gas dynamics in biological systems. Included pressure wave
-                  propagation, turbulence modeling, and acoustic analysis. The project covered everything from initial
-                  gas composition to final dispersion patterns. The things we do for science... and the looks we got
-                  from classmates were priceless.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-green-100 text-green-800 text-sm px-3 py-1 rounded">Gas Dynamics</span>
-                  <span className="bg-purple-100 text-purple-800 text-sm px-3 py-1 rounded">Acoustics</span>
-                  <span className="bg-pink-100 text-pink-800 text-sm px-3 py-1 rounded">Biology</span>
-                  <span className="bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded">MATLAB</span>
-                </div>
-              </div>
-
-              <div className="bg-red-50 p-6 rounded-lg border border-red-200">
-                <h4 className="font-bold text-xl mb-3 text-gray-800">Dick Plane</h4>
-                <p className="text-lg text-gray-600 mb-3">Unconventional aircraft configuration study</p>
-                <p className="text-sm text-gray-700 mb-4">
-                  Aerodynamic analysis of... unconventionally shaped aircraft configurations. Studied lift generation,
-                  drag characteristics, and stability of non-traditional geometries. The project required maintaining
-                  professional composure while discussing "thrust characteristics" and "penetration efficiency."
-                  Engineering knows no bounds of awkwardness.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded">Aerodynamics</span>
-                  <span className="bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded">Unconventional</span>
-                  <span className="bg-yellow-100 text-yellow-800 text-sm px-3 py-1 rounded">Questionable</span>
-                  <span className="bg-indigo-100 text-indigo-800 text-sm px-3 py-1 rounded">Wind Tunnel</span>
-                </div>
-              </div>
-
-              <div className="bg-red-50 p-6 rounded-lg border border-red-200">
-                <h4 className="font-bold text-xl mb-3 text-gray-800">Waifu Dancing Mechanical Design</h4>
-                <p className="text-lg text-gray-600 mb-3">Anthropomorphic robotic motion system</p>
-                <p className="text-sm text-gray-700 mb-4">
-                  Mechanical design and kinematic analysis of humanoid dancing robots. Included joint optimization,
-                  motion planning, and synchronization with music. The project involved servo motor selection, gear
-                  ratio calculations, and programming dance sequences. Where engineering meets... culture. The final
-                  presentation was... memorable.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-indigo-100 text-indigo-800 text-sm px-3 py-1 rounded">Robotics</span>
-                  <span className="bg-teal-100 text-teal-800 text-sm px-3 py-1 rounded">Kinematics</span>
-                  <span className="bg-pink-100 text-pink-800 text-sm px-3 py-1 rounded">Cultural</span>
-                  <span className="bg-purple-100 text-purple-800 text-sm px-3 py-1 rounded">Arduino</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Window>
-      )}
-
-      {/* Trash Projects Window */}
-      {openWindows.includes("trash-projects") && (
-        <Window
-          title="🗑️ Absolute Trash Collection"
-          isActive={activeWindow === "trash-projects"}
-          onClose={() => closeWindow("trash-projects")}
-          onFocus={() => focusWindow("trash-projects")}
-          initialPosition={getResponsivePosition(200, 100)}
-          width={getResponsiveSize(700, 600).width}
-          height={getResponsiveSize(700, 600).height}
-          zIndex={getWindowZIndex("trash-projects")}
-        >
-          <div className="p-6 bg-white h-full overflow-auto">
-            <div className="flex items-center mb-6">
-              <span className="text-3xl mr-3">🗑️</span>
-              <h2 className="text-2xl font-bold text-gray-700">Academic Requirement Trash</h2>
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-gray-50 p-6 rounded-lg border border-gray-300">
-                <h4 className="font-bold text-xl mb-3 text-gray-800">MAP of IOE Pulchowk in Retro Style (using C)</h4>
-                <p className="text-lg text-gray-600 mb-3">Campus mapping project in ancient C</p>
-                <p className="text-sm text-gray-700 mb-4">
-                  Created a digital map of IOE Pulchowk campus using pure C programming. Features ASCII art graphics,
-                  file I/O operations, and basic navigation. The professor insisted on C because "it builds character."
-                  The year was 2024. Modern languages existed. The pain was real. Spent weeks debugging pointer
-                  arithmetic for what could have been done in Python in an afternoon.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-blue-100 text-blue-800 text-sm px-3 py-1 rounded">C Programming</span>
-                  <span className="bg-green-100 text-green-800 text-sm px-3 py-1 rounded">ASCII Art</span>
-                  <span className="bg-red-100 text-red-800 text-sm px-3 py-1 rounded">Academic Torture</span>
-                  <span className="bg-yellow-100 text-yellow-800 text-sm px-3 py-1 rounded">Pointers Hell</span>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 p-6 rounded-lg border border-gray-300">
-                <h4 className="font-bold text-xl mb-3 text-gray-800">Motion Capture Software</h4>
-                <p className="text-lg text-gray-600 mb-3">Computer vision project for academic credit</p>
-                <p className="text-sm text-gray-700 mb-4">
-                  Developed motion capture software using OpenCV and Python. Features include marker tracking, 3D
-                  reconstruction, and animation export. Worked perfectly during development and testing. Crashed
-                  spectacularly during the final presentation when the professor asked "what if we move the camera?"
-                  Classic demo gods at work.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-purple-100 text-purple-800 text-sm px-3 py-1 rounded">Computer Vision</span>
-                  <span className="bg-cyan-100 text-cyan-800 text-sm px-3 py-1 rounded">OpenCV</span>
-                  <span className="bg-yellow-100 text-yellow-800 text-sm px-3 py-1 rounded">Demo Gods</span>
-                  <span className="bg-red-100 text-red-800 text-sm px-3 py-1 rounded">Murphy's Law</span>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 p-6 rounded-lg border border-gray-300">
-                <h4 className="font-bold text-xl mb-3 text-gray-800">3D Design Hackathon</h4>
-                <p className="text-lg text-gray-600 mb-3">24-hour design competition survival</p>
-                <p className="text-sm text-gray-700 mb-4">
-                  Participated in 24-hour 3D design hackathon. Created innovative product designs under extreme time
-                  pressure. Survived on energy drinks, determination, and questionable life choices. Won participation
-                  certificate and a newfound appreciation for sleep. Worth it? Debatable. Would do it again? Probably.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded">3D Design</span>
-                  <span className="bg-red-100 text-red-800 text-sm px-3 py-1 rounded">Sleep Deprivation</span>
-                  <span className="bg-yellow-100 text-yellow-800 text-sm px-3 py-1 rounded">Participation Trophy</span>
-                  <span className="bg-green-100 text-green-800 text-sm px-3 py-1 rounded">Caffeine Overdose</span>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 p-6 rounded-lg border border-gray-300">
-                <h4 className="font-bold text-xl mb-3 text-gray-800">Gaussian Splatting</h4>
-                <p className="text-lg text-gray-600 mb-3">3D reconstruction using neural radiance fields</p>
-                <p className="text-sm text-gray-700 mb-4">
-                  Implemented Gaussian splatting for 3D scene reconstruction from 2D images. Involved neural networks,
-                  optimization algorithms, and lots of GPU crying. Results were... splat-tastic. Professor was not
-                  amused by the pun. GPU temperature reached levels that could probably cook an egg. Worth every degree
-                  Celsius.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="bg-indigo-100 text-indigo-800 text-sm px-3 py-1 rounded">Neural Networks</span>
-                  <span className="bg-teal-100 text-teal-800 text-sm px-3 py-1 rounded">3D Reconstruction</span>
-                  <span className="bg-red-100 text-red-800 text-sm px-3 py-1 rounded">GPU Torture</span>
-                  <span className="bg-purple-100 text-purple-800 text-sm px-3 py-1 rounded">PyTorch</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Window>
-      )}
-
-      {/* Copyright */}
-      <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 text-xs text-white/80 drop-shadow-sm">
-        © {new Date().getFullYear()} Shubham Ranabhat
+                )}
+              </Window>
+            ) : null
+          )}
       </div>
     </div>
   )

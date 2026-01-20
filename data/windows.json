@@ -1,0 +1,96 @@
+[
+  {
+    "id": 1,
+    "key": "about",
+    "label": "about",
+    "type": "builtIn",
+    "showOnDesktop": false,
+    "showInHome": true,
+    "orderDesktop": 1,
+    "orderHome": 1,
+    "isHidden": false
+  },
+  {
+    "id": 2,
+    "key": "engineering",
+    "label": "engineering",
+    "type": "builtIn",
+    "showOnDesktop": true,
+    "showInHome": true,
+    "orderDesktop": 2,
+    "orderHome": 2,
+    "isHidden": false
+  },
+  {
+    "id": 3,
+    "key": "games",
+    "label": "games",
+    "type": "builtIn",
+    "showOnDesktop": true,
+    "showInHome": true,
+    "orderDesktop": 3,
+    "orderHome": 3,
+    "isHidden": false
+  },
+  {
+    "id": 4,
+    "key": "art",
+    "label": "art",
+    "type": "builtIn",
+    "showOnDesktop": true,
+    "showInHome": true,
+    "orderDesktop": 4,
+    "orderHome": 4,
+    "isHidden": false
+  },
+  {
+    "id": 5,
+    "key": "contact",
+    "label": "contact",
+    "type": "builtIn",
+    "showOnDesktop": false,
+    "showInHome": true,
+    "orderDesktop": 5,
+    "orderHome": 5,
+    "isHidden": false
+  },
+  {
+    "id": 6,
+    "key": "faq",
+    "label": "faq",
+    "type": "builtIn",
+    "showOnDesktop": false,
+    "showInHome": true,
+    "orderDesktop": 6,
+    "orderHome": 6,
+    "isHidden": false
+  },
+  {
+    "id": 7,
+    "key": "custom-7",
+    "label": "New tab",
+    "type": "custom",
+    "showOnDesktop": false,
+    "showInHome": true,
+    "orderDesktop": 7,
+    "orderHome": 7,
+    "isHidden": false,
+    "content": "cbnbnvbnvcbn",
+    "icon": "folder",
+    "layout": "projects"
+  },
+  {
+    "id": 8,
+    "key": "custom-8",
+    "label": "New tab 2 Test",
+    "type": "custom",
+    "showOnDesktop": false,
+    "showInHome": true,
+    "orderDesktop": 8,
+    "orderHome": 8,
+    "isHidden": false,
+    "content": "",
+    "icon": "folder",
+    "layout": "content"
+  }
+]

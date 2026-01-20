@@ -1,33 +1,66 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { trackVisit, getAnalytics } from "@/lib/db"
-import { requireAuth } from "@/lib/auth"
+import { NextRequest, NextResponse } from 'next/server';
+import { trackVisit, getAnalytics } from '@/lib/data';
+import { v4 as uuidv4 } from 'uuid';
+import { requireAuth } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const data = await request.json()
-    const ip = request.ip || request.headers.get("x-forwarded-for") || "unknown"
+    const { page, action } = await request.json();
+    const userAgent = request.headers.get('user-agent') || '';
+    const referrer = request.headers.get('referer') || '';
+    
+    // Get client IP
+    const forwarded = request.headers.get('x-forwarded-for');
+    const ip = forwarded ? forwarded.split(',')[0] : '127.0.0.1';
+
+    // Generate visitor ID (in a real app, you'd use a more sophisticated approach)
+    const visitorId = uuidv4();
+    const sessionId = uuidv4();
 
     await trackVisit({
-      ...data,
-      ip_address: ip,
-    })
+      visitorId,
+      page: page || '/',
+      action: action || 'pageview',
+      userAgent,
+      ipAddress: ip,
+      referrer: referrer || undefined,
+      sessionId
+    });
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true });
+
   } catch (error) {
-    return NextResponse.json({ error: "Failed to track visit" }, { status: 500 })
+    console.error('Analytics POST error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth()
+    // Require authentication for viewing analytics
+    try {
+      requireAuth(request);
+    } catch (error) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
 
-    const { searchParams } = new URL(request.url)
-    const days = Number.parseInt(searchParams.get("days") || "30")
+    const { searchParams } = new URL(request.url);
+    const days = parseInt(searchParams.get('days') || '30');
 
-    const analytics = await getAnalytics(days)
-    return NextResponse.json(analytics)
+    const analytics = getAnalytics(days);
+    return NextResponse.json(analytics);
+
   } catch (error) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    console.error('Analytics GET error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

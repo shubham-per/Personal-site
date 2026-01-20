@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS projects (
   description TEXT,
   category VARCHAR(50) NOT NULL, -- 'engineering', 'games', 'art'
   image_url VARCHAR(500),
+  photos TEXT[], -- PostgreSQL array for additional photos
+  keywords TEXT[], -- PostgreSQL array for SEO keywords
+  project_link VARCHAR(500), -- URL to the project
+  card_style VARCHAR(20) DEFAULT 'style1', -- Card display style
   tags TEXT[], -- PostgreSQL array for tags
   order_index INTEGER DEFAULT 0,
   is_active BOOLEAN DEFAULT true,
