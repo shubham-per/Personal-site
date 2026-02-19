@@ -21,7 +21,7 @@ export default function DebugLogin() {
       const data = await response.json()
       setStatus(data)
     } catch (error) {
-      setStatus({ error: error.message })
+      setStatus({ error: error instanceof Error ? error.message : String(error) })
     }
     setLoading(false)
   }
@@ -33,7 +33,7 @@ export default function DebugLogin() {
       const data = await response.json()
       setResult(data)
     } catch (error) {
-      setResult({ error: error.message })
+      setResult({ error: error instanceof Error ? error.message : String(error) })
     }
     setLoading(false)
   }
@@ -49,7 +49,7 @@ export default function DebugLogin() {
       const data = await response.json()
       setResult(data)
     } catch (error) {
-      setResult({ error: error.message })
+      setResult({ error: error instanceof Error ? error.message : String(error) })
     }
     setLoading(false)
   }
@@ -70,7 +70,7 @@ export default function DebugLogin() {
         setResult({ success: false, error: data.error || "Login failed" })
       }
     } catch (error) {
-      setResult({ error: error.message })
+      setResult({ error: error instanceof Error ? error.message : String(error) })
     }
     setLoading(false)
   }

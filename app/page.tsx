@@ -88,6 +88,8 @@ export default function Page() {
   // Theme state - default to dark
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
 
+  const [loadingProgress, setLoadingProgress] = useState(0)
+
   // Load theme preference on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem('shubu-theme') as 'light' | 'dark' | null
@@ -131,9 +133,19 @@ export default function Page() {
     localStorage.setItem('theme', theme)
   }, [theme])
 
+
   useEffect(() => {
     const loadContent = async () => {
       try {
+        // Step 1: Fetch Background (Priority for loading screen)
+        const bgRes = await fetch("/api/background")
+        if (bgRes.ok) {
+          const bgData = await bgRes.json()
+          setBackground(bgData)
+        }
+        setLoadingProgress(20)
+
+        // Step 2: Fetch Text Content
         const sections = ["about", "contact", "faq", "about_subtitle", "home_greeting", "home_subtitle"]
         const contentData: Record<string, Content> = {}
 
@@ -145,7 +157,9 @@ export default function Page() {
           }
         }
         setContent(contentData)
+        setLoadingProgress(40)
 
+        // Step 3: Fetch Projects
         const projectsRes = await fetch("/api/projects", { cache: "no-store" })
         const rawProjects = await projectsRes.json()
         const projectsData: Project[] = rawProjects.map((p: any) => ({
@@ -155,30 +169,35 @@ export default function Page() {
           tags: Array.isArray(p.tags) ? p.tags : [],
         }))
         setProjects(projectsData)
+        setLoadingProgress(60)
 
+        // Step 4: Fetch FAQ
         const faqRes = await fetch("/api/faq")
         const faqData = await faqRes.json()
         setFaqItems(faqData)
+        setLoadingProgress(70)
 
-        const bgRes = await fetch("/api/background")
-        if (bgRes.ok) {
-          const bgData = await bgRes.json()
-          setBackground(bgData)
-        }
-
+        // Step 5: Fetch Windows configuration
         const winRes = await fetch("/api/windows")
         if (winRes.ok) {
           const winData = await winRes.json()
           setWindows(winData)
         }
+        setLoadingProgress(85)
 
+        // Step 6: Fetch Contact Links
         const linksRes = await fetch("/api/contact-links", { cache: "no-store" })
         if (linksRes.ok) {
           const linksData = await linksRes.json()
           setContactLinks(linksData)
         }
+        setLoadingProgress(100)
 
-        setLoading(false)
+        // Small delay to let the bar fill visually before hiding
+        setTimeout(() => {
+          setLoading(false)
+        }, 500)
+
       } catch (error) {
         console.error("Failed to load content:", error)
         setLoading(false)
@@ -324,8 +343,12 @@ export default function Page() {
       return { style: {} as React.CSSProperties, className: "", iconColor: "white" }
     }
 
-    // Use desktop background for this component
-    const bg = background.desktop || { type: "gradient", color: "#2563eb", from: "#60a5fa", via: "#3b82f6", to: "#2563eb", overlay: true };
+    // Determine which background to use based on device type
+    // If loading, prioritize isMobile check to show correct bg
+    const bg = isMobile
+      ? (background.mobile || { type: "gradient", color: "#2563eb", from: "#60a5fa", via: "#3b82f6", to: "#2563eb", overlay: true })
+      : (background.desktop || { type: "gradient", color: "#2563eb", from: "#60a5fa", via: "#3b82f6", to: "#2563eb", overlay: true });
+
     const iconColor = bg.iconColor || "white";
 
     if (bg.type === "solid") {
@@ -356,15 +379,52 @@ export default function Page() {
 
   /* renderIcon removed - using WindowIcon component */
 
-  if (isMobile) {
-    return <MobileLayout theme={theme} onSetTheme={setTheme} />
+  if (loading || !background || windows.length === 0) {
+    // Generate temporary background props if background isn't loaded yet
+    const loadingBgProps = background ? getBackgroundClass() : {
+      // Default fallback while fetching background
+      style: { background: 'linear-gradient(to bottom, #1e293b, #0f172a)' } as React.CSSProperties,
+      className: ""
+    }
+
+    return (
+      <div
+        className={`h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden ${loadingBgProps.className}`}
+        style={loadingBgProps.style}
+      >
+        {/* Dark Overlay for Loading Screen */}
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-md z-0" />
+
+        <div className="relative z-10 w-64 md:w-80 flex flex-col items-center gap-4">
+          <div className="text-white text-xl font-light tracking-widest uppercase">Loading</div>
+
+          {/* Progress Bar Container */}
+          <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden backdrop-blur-sm">
+            {/* Progress Bar Fill */}
+            <div
+              className="h-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)] transition-all duration-300 ease-out"
+              style={{ width: `${loadingProgress}%` }}
+            />
+          </div>
+
+          <div className="text-white/60 text-xs font-mono">{loadingProgress}%</div>
+        </div>
+      </div>
+    )
   }
 
-  if (loading || !background || windows.length === 0) {
+  if (isMobile) {
     return (
-      <div className="h-screen w-screen bg-gradient-to-b from-blue-400 via-blue-500 to-blue-600 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
+      <MobileLayout
+        theme={theme}
+        onSetTheme={setTheme}
+        content={content}
+        projects={projects}
+        faqItems={faqItems}
+        windows={windows}
+        background={background}
+        contactLinks={contactLinks}
+      />
     )
   }
 

@@ -115,7 +115,8 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Projects POST error:', error);
-      return NextResponse.json({ error: `Failed to create project: ${error.message}` }, { status: 500 });
+      const errorMessage = error?.message || 'Unknown error'
+      return NextResponse.json({ error: `Failed to create project: ${errorMessage}` }, { status: 500 });
     }
 
     return NextResponse.json({

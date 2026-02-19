@@ -36,6 +36,7 @@ import {
   FolderOpen,
 } from "lucide-react"
 import { deriveDefaultIcon } from "@/lib/icon-utils"
+import { SiteConfig } from "@/lib/data"
 
 interface Project {
   id: number
@@ -115,6 +116,7 @@ interface ContactLink {
   iconUrl: string
   order: number
   isActive: boolean
+  showOnDesktop?: boolean
 }
 
 export default function AdminPanel() {
@@ -187,6 +189,11 @@ export default function AdminPanel() {
       const rawProjects = await projectsRes.json()
       const projectsData: Project[] = rawProjects.map((p: any) => ({
         ...p,
+        // Map API camelCase to frontend snake_case/interface properties
+        order_index: p.orderIndex ?? p.order_index ?? 0,
+        image_url: p.imageUrl ?? p.image_url,
+        is_active: p.isActive ?? p.is_active ?? true,
+        // Ensure arrays are arrays
         photos: Array.isArray(p.photos) ? p.photos : [],
         keywords: Array.isArray(p.keywords) ? p.keywords : [],
         tags: Array.isArray(p.tags) ? p.tags : [],

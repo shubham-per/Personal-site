@@ -1,5 +1,0 @@
-{
-  "/api/analytics/route": "app/api/analytics/route.js",
-  "/icon.png/route": "app/icon.png/route.js",
-  "/page": "app/page.js"
-}

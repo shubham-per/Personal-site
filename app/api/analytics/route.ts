@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { trackVisit, getAnalytics } from '@/lib/data';
+import { trackVisit, getAnalytics } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
 import { requireAuth } from '@/lib/auth';
 
@@ -18,13 +18,13 @@ export async function POST(request: NextRequest) {
     const sessionId = uuidv4();
 
     await trackVisit({
-      visitorId,
+      visitor_id: visitorId,
       page: page || '/',
       action: action || 'pageview',
-      userAgent,
-      ipAddress: ip,
+      user_agent: userAgent,
+      ip_address: ip,
       referrer: referrer || undefined,
-      sessionId
+      session_id: sessionId
     });
 
     return NextResponse.json({ success: true });

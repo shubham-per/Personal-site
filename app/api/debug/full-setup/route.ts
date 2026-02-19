@@ -81,12 +81,13 @@ export async function POST() {
       user: users[0],
     })
   } catch (error) {
-    steps.push(`❌ Error: ${error.message}`)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    steps.push(`❌ Error: ${errorMessage}`)
 
     return NextResponse.json(
       {
         success: false,
-        error: error.message,
+        error: errorMessage,
         steps,
         troubleshooting: {
           checkEnvironmentVariables: [
@@ -120,11 +121,12 @@ export async function GET() {
       },
     })
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
       {
         userExists: false,
         databaseConnected: false,
-        error: error.message,
+        error: errorMessage,
         environmentVariables: {
           DATABASE_URL: !!process.env.DATABASE_URL,
           JWT_SECRET: !!process.env.JWT_SECRET,

@@ -34,10 +34,11 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message,
+        error: errorMessage,
       },
       { status: 500 },
     )
@@ -66,10 +67,11 @@ export async function GET() {
       hash: hashedPassword.substring(0, 20) + "...",
     })
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message,
+        error: errorMessage,
       },
       { status: 500 },
     )

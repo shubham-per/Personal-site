@@ -66,75 +66,25 @@ interface ContactLink {
 interface MobileLayoutProps {
   theme?: 'light' | 'dark'
   onSetTheme?: (theme: 'light' | 'dark') => void
+  content: Record<string, Content>
+  projects: ExtendedProject[]
+  faqItems: FaqItem[]
+  windows: WindowConfig[]
+  background: BackgroundConfig | null
+  contactLinks: ContactLink[]
 }
 
-export default function MobileLayout({ theme = 'light', onSetTheme }: MobileLayoutProps) {
+export default function MobileLayout({
+  theme = 'light',
+  onSetTheme,
+  content,
+  projects,
+  faqItems,
+  windows,
+  background,
+  contactLinks
+}: MobileLayoutProps) {
   const [activeSection, setActiveSection] = useState<string | null>(null)
-  const [content, setContent] = useState<Record<string, Content>>({})
-  const [projects, setProjects] = useState<ExtendedProject[]>([])
-  const [faqItems, setFaqItems] = useState<FaqItem[]>([])
-  const [windows, setWindows] = useState<WindowConfig[]>([])
-  const [background, setBackground] = useState<BackgroundConfig | null>(null)
-  const [contactLinks, setContactLinks] = useState<ContactLink[]>([])
-  const [loading, setLoading] = useState(true)
-
-  // Load content from admin panel
-  useEffect(() => {
-    const loadContent = async () => {
-      try {
-        // Load content sections
-        const sections = ["about", "contact", "faq", "home_greeting", "home_subtitle"]
-        const contentData: Record<string, Content> = {}
-
-        for (const section of sections) {
-          const res = await fetch(`/api/content?section=${section}`, { cache: "no-store" })
-          const data = await res.json()
-          if (data) contentData[section] = data
-        }
-        setContent(contentData)
-
-        // Load projects
-        const projectsRes = await fetch("/api/projects", { cache: "no-store" })
-        const projectsData = await projectsRes.json()
-        setProjects(projectsData)
-
-        // Load FAQ
-        const faqRes = await fetch("/api/faq", { cache: "no-store" })
-        if (faqRes.ok) {
-          const faqData = await faqRes.json()
-          setFaqItems(faqData)
-        }
-
-        // Load windows
-        const winRes = await fetch("/api/windows", { cache: "no-store" })
-        if (winRes.ok) {
-          const winData = await winRes.json()
-          setWindows(winData)
-        }
-
-        // Load background
-        const bgRes = await fetch("/api/background", { cache: "no-store" })
-        if (bgRes.ok) {
-          const bgData = await bgRes.json()
-          setBackground(bgData)
-        }
-
-        // Load contact links
-        const linksRes = await fetch("/api/contact-links", { cache: "no-store" })
-        if (linksRes.ok) {
-          const linksData = await linksRes.json()
-          setContactLinks(linksData)
-        }
-
-        setLoading(false)
-      } catch (error) {
-        console.error("Failed to load content:", error)
-        setLoading(false)
-      }
-    }
-
-    loadContent()
-  }, [])
 
   const handleIconClick = (section: string) => {
     setActiveSection(section)
@@ -187,15 +137,6 @@ export default function MobileLayout({ theme = 'light', onSetTheme }: MobileLayo
   const bgProps = getBackgroundStyle()
 
   /* renderIcon removed - using WindowIcon component */
-
-  // Show loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-400 via-blue-500 to-blue-600 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    )
-  }
 
   if (activeSection) {
     return (

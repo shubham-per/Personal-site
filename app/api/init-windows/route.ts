@@ -35,7 +35,8 @@ export async function GET() {
                     .single();
 
                 if (error) {
-                    results.push({ key: win.key, status: 'error', error: error.message });
+                    const errorMessage = error?.message || 'Unknown error'
+                    results.push({ key: win.key, status: 'error', error: errorMessage });
                 } else {
                     results.push({ key: win.key, status: 'created', id: data.id });
                 }

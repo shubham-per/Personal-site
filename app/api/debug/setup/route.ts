@@ -37,10 +37,11 @@ export async function POST() {
       user: user[0],
     })
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message,
+        error: errorMessage,
       },
       { status: 500 },
     )
@@ -57,10 +58,11 @@ export async function GET() {
       user: user[0] || null,
     })
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
       {
         userExists: false,
-        error: error.message,
+        error: errorMessage,
       },
       { status: 500 },
     )
