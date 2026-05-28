@@ -118,6 +118,11 @@ export interface ContactLink {
 // User & Auth Types
 // ============================================================================
 
+export interface SiteConfig {
+    title: string;
+    faviconUrl?: string;
+}
+
 export interface User {
     id: number;
     email: string;

@@ -2,7 +2,7 @@
 import { createPortal } from "react-dom"
 
 import { useState, useEffect } from "react"
-import type { Project } from "@/lib/db"
+import type { Project } from "@/lib/types"
 import { X, ChevronLeft, ChevronRight, Play, Download } from "lucide-react"
 
 interface ArtGalleryProps {

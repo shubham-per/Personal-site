@@ -34,6 +34,7 @@ export default function DesktopIcon({
       className={`flex flex-col items-center cursor-pointer select-none ${size === "large" ? "p-3" : "p-2"
         } rounded-lg ${isSelected ? "bg-white/20 backdrop-blur-sm" : ""} hover:bg-white/10 transition-all duration-200`}
       onClick={(e) => {
+        e.stopPropagation()
         handleClick()
         // Allow single click to open for better touch support & web usability
         if (onDoubleClick) onDoubleClick()

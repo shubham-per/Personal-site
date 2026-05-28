@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Window from "@/components/window"
 import DesktopIcon from "@/components/desktop-icon"
 import { WindowIcon } from "@/components/window-icon"
@@ -8,7 +8,7 @@ import MobileLayout from "@/components/mobile-layout"
 import AnalyticsTracker from "@/components/analytics-tracker"
 import { ArtGallery } from "@/components/art-gallery"
 import { FaqAccordion } from "@/components/faq-accordion"
-import { Project } from "@/lib/db"
+import { Project } from "@/lib/types"
 import { User, Youtube, MessageCircle, HelpCircle, Mail, Rocket, Gamepad2, Palette } from "lucide-react"
 import { formatText } from "@/lib/format"
 
@@ -89,6 +89,7 @@ export default function Page() {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
 
   const [loadingProgress, setLoadingProgress] = useState(0)
+  const initialUrlSynced = useRef(false)
 
   // Load theme preference on mount
   useEffect(() => {
@@ -162,12 +163,12 @@ export default function Page() {
         // Step 3: Fetch Projects
         const projectsRes = await fetch("/api/projects", { cache: "no-store" })
         const rawProjects = await projectsRes.json()
-        const projectsData: Project[] = rawProjects.map((p: any) => ({
+        const projectsData: Project[] = Array.isArray(rawProjects) ? rawProjects.map((p: any) => ({
           ...p,
           photos: Array.isArray(p.photos) ? p.photos : [],
           keywords: Array.isArray(p.keywords) ? p.keywords : [],
           tags: Array.isArray(p.tags) ? p.tags : [],
-        }))
+        })) : []
         setProjects(projectsData)
         setLoadingProgress(60)
 
@@ -181,7 +182,7 @@ export default function Page() {
         const winRes = await fetch("/api/windows")
         if (winRes.ok) {
           const winData = await winRes.json()
-          setWindows(winData)
+          setWindows(Array.isArray(winData) ? winData : [])
         }
         setLoadingProgress(85)
 
@@ -206,6 +207,40 @@ export default function Page() {
 
     loadContent()
   }, [])
+
+  // Open window based on initial URL slug
+  useEffect(() => {
+    const path = window.location.pathname
+    const slug = path.replace(/^\//, "")
+    if (slug && slug !== "" && slug !== "home" && !slug.includes("/")) {
+      setOpenWindows((prev) => prev.includes(slug) ? prev : [...prev, slug])
+      setActiveWindow(slug)
+    }
+    initialUrlSynced.current = true
+  }, [])
+
+  // Sync URL on browser back/forward
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname
+      const slug = path.replace(/^\//, "")
+      if (!slug || slug === "" || slug === "home") {
+        setActiveWindow("home")
+      } else if (!slug.includes("/")) {
+        setOpenWindows((prev) => prev.includes(slug) ? prev : [...prev, slug])
+        setActiveWindow(slug)
+      }
+    }
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [])
+
+  // Sync URL to activeWindow after React commit
+  useEffect(() => {
+    if (!initialUrlSynced.current) return
+    const path = activeWindow === "home" || !activeWindow ? "/" : `/${activeWindow}`
+    History.prototype.replaceState.call(window.history, null, "", path)
+  }, [activeWindow])
 
   // Inject SEO meta tags dynamically based on project keywords
   useEffect(() => {
@@ -476,7 +511,7 @@ export default function Page() {
             ))}
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 h-10 sm:h-12 bg-black/30 backdrop-blur-md border-t border-white/20 flex items-center px-2 sm:px-4 space-x-1 sm:space-x-2">
+        <div className="absolute bottom-0 left-0 right-0 h-10 sm:h-12 bg-black/30 backdrop-blur-md border-t border-white/20 flex items-center px-2 sm:px-4 space-x-1 sm:space-x-2" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => openWindow("home")}
             className="bg-white/20 backdrop-blur-sm px-4 py-2 text-sm font-medium border border-white/30 rounded hover:bg-white/30 text-white transition-all duration-200 flex items-center space-x-2"

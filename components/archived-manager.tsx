@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { WindowConfig } from "@/lib/data"
+import { WindowConfig } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 

@@ -94,7 +94,8 @@ export async function PUT(request: NextRequest) {
       data = await request.json();
     }
 
-    const mode = data.mode || 'desktop';
+    const urlMode = request.nextUrl.searchParams.get('mode');
+    const mode = data.mode || urlMode || 'desktop';
 
     const updateData = {
       mode,
@@ -117,7 +118,25 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to update background' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    // Return the updated config by fetching both modes
+    const { data: updated } = await supabase
+      .from('background')
+      .select('*');
+
+    const config: any = {
+      desktop: { type: 'solid', color: '#1a1a2e', from: '#667eea', via: '#764ba2', to: '#f093fb', overlay: false, iconColor: '#ffffff' },
+      mobile: { type: 'solid', color: '#1a1a2e', from: '#667eea', via: '#764ba2', to: '#f093fb', overlay: false, iconColor: '#ffffff' },
+    };
+    for (const row of updated || []) {
+      const m = row.mode as 'desktop' | 'mobile';
+      if (m === 'desktop' || m === 'mobile') {
+        config[m] = {
+          type: row.type, color: row.color, from: row.from_color, via: row.via_color,
+          to: row.to_color, overlay: row.overlay, imageUrl: row.image_url, iconColor: row.icon_color,
+        };
+      }
+    }
+    return NextResponse.json(config);
   } catch (error) {
     console.error('Background PUT error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

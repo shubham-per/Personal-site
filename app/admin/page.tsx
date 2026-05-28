@@ -36,7 +36,7 @@ import {
   FolderOpen,
 } from "lucide-react"
 import { deriveDefaultIcon } from "@/lib/icon-utils"
-import { SiteConfig } from "@/lib/data"
+import { SiteConfig } from "@/lib/types"
 
 interface Project {
   id: number
@@ -2117,7 +2117,7 @@ function BackgroundForm({
       }
 
       const res = await fetch(`/api/background?mode=${mode}`, {
-        method: "POST",
+        method: "PUT",
         body,
         headers,
       })

@@ -6,7 +6,7 @@ import { WindowIcon } from "@/components/window-icon"
 import AnalyticsTracker from "@/components/analytics-tracker"
 import { ArtGallery } from "@/components/art-gallery"
 import { FaqAccordion, FaqItem } from "@/components/faq-accordion"
-import { Project } from "@/lib/db"
+import { Project } from "@/lib/types"
 import { formatText } from "@/lib/format"
 
 interface Content {
