@@ -39,7 +39,8 @@ interface WindowConfig {
   content?: string
   icon?: string
   customIconUrl?: string
-  layout?: "content" | "projects" | "faq" | "gallery"
+  layout?: "content" | "projects" | "faq" | "gallery" | "tabs"
+  isArchived?: boolean
 }
 
 interface BackgroundStyle {
@@ -71,6 +72,7 @@ interface ContactLink {
 export default function Page() {
   const [openWindows, setOpenWindows] = useState<string[]>(["home"])
   const [activeWindow, setActiveWindow] = useState("home")
+  const [activeSubTab, setActiveSubTab] = useState<Record<string, string>>({})
   const [windowDimensions, setWindowDimensions] = useState({ width: 1200, height: 800 })
   const [windowZIndex, setWindowZIndex] = useState<Record<string, number>>({})
   const [nextZIndex, setNextZIndex] = useState(100)
@@ -86,7 +88,7 @@ export default function Page() {
   // Easter egg: track which image is shown for each project
   const [projectImageIndex, setProjectImageIndex] = useState<Record<number, number>>({})
   // Theme state - default to dark
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
   const [loadingProgress, setLoadingProgress] = useState(0)
   const initialUrlSynced = useRef(false)
@@ -97,9 +99,7 @@ export default function Page() {
     if (savedTheme) {
       setTheme(savedTheme)
     } else {
-      // Default: Dark for desktop, Light for mobile
-      const isMobileWidth = window.innerWidth < 768
-      setTheme(isMobileWidth ? 'light' : 'dark')
+      setTheme('light')
     }
   }, [])
 
@@ -212,9 +212,15 @@ export default function Page() {
   useEffect(() => {
     const path = window.location.pathname
     const slug = path.replace(/^\//, "")
-    if (slug && slug !== "" && slug !== "home" && !slug.includes("/")) {
-      setOpenWindows((prev) => prev.includes(slug) ? prev : [...prev, slug])
-      setActiveWindow(slug)
+    if (slug && slug !== "" && slug !== "home") {
+      const parts = slug.split("/")
+      const windowKey = parts[0]
+      const subTabLabel = parts[1]
+      setOpenWindows((prev) => prev.includes(windowKey) ? prev : [...prev, windowKey])
+      setActiveWindow(windowKey)
+      if (subTabLabel) {
+        setActiveSubTab((prev) => ({ ...prev, [windowKey]: subTabLabel }))
+      }
     }
     initialUrlSynced.current = true
   }, [])
@@ -226,21 +232,40 @@ export default function Page() {
       const slug = path.replace(/^\//, "")
       if (!slug || slug === "" || slug === "home") {
         setActiveWindow("home")
-      } else if (!slug.includes("/")) {
-        setOpenWindows((prev) => prev.includes(slug) ? prev : [...prev, slug])
-        setActiveWindow(slug)
+      } else {
+        const parts = slug.split("/")
+        const windowKey = parts[0]
+        const subTabLabel = parts[1]
+        setOpenWindows((prev) => prev.includes(windowKey) ? prev : [...prev, windowKey])
+        setActiveWindow(windowKey)
+        setActiveSubTab((prev) => {
+          const next = { ...prev }
+          if (subTabLabel) {
+            next[windowKey] = subTabLabel
+          } else {
+            delete next[windowKey]
+          }
+          return next
+        })
       }
     }
     window.addEventListener("popstate", handlePopState)
     return () => window.removeEventListener("popstate", handlePopState)
   }, [])
 
-  // Sync URL to activeWindow after React commit
+  // Sync URL to activeWindow and activeSubTab after React commit
   useEffect(() => {
     if (!initialUrlSynced.current) return
-    const path = activeWindow === "home" || !activeWindow ? "/" : `/${activeWindow}`
+    const subTabLabel = activeWindow ? activeSubTab[activeWindow] : undefined
+    let path = "/"
+    if (activeWindow && activeWindow !== "home") {
+      path = `/${activeWindow}`
+      if (subTabLabel) {
+        path += `/${encodeURIComponent(subTabLabel)}`
+      }
+    }
     History.prototype.replaceState.call(window.history, null, "", path)
-  }, [activeWindow])
+  }, [activeWindow, activeSubTab])
 
   // Inject SEO meta tags dynamically based on project keywords
   useEffect(() => {
@@ -459,6 +484,9 @@ export default function Page() {
         windows={windows}
         background={background}
         contactLinks={contactLinks}
+        activeSubTab={activeSubTab}
+        setActiveSubTab={setActiveSubTab}
+        setActiveWindow={setActiveWindow}
       />
     )
   }
@@ -910,13 +938,143 @@ export default function Page() {
                 onClose={() => closeWindow(w.key)}
                 onFocus={() => focusWindow(w.key)}
                 initialPosition={getResponsivePosition(300, 200)}
-                width={getResponsiveSize(w.layout === "projects" || w.layout === "gallery" ? 600 : 500, w.layout === "projects" || w.layout === "gallery" ? 500 : 400).width}
-                height={getResponsiveSize(w.layout === "projects" || w.layout === "gallery" ? 600 : 500, w.layout === "projects" || w.layout === "gallery" ? 500 : 400).height}
+                width={getResponsiveSize(w.layout === "projects" || w.layout === "gallery" || w.layout === "tabs" ? 600 : 500, w.layout === "projects" || w.layout === "gallery" || w.layout === "tabs" ? 500 : 400).width}
+                height={getResponsiveSize(w.layout === "projects" || w.layout === "gallery" || w.layout === "tabs" ? 600 : 500, w.layout === "projects" || w.layout === "gallery" || w.layout === "tabs" ? 500 : 400).height}
                 zIndex={getWindowZIndex(w.key)}
                 theme={theme}
                 onSetTheme={setTheme}
               >
-                {w.layout === "gallery" ? (
+                {w.layout === "tabs" ? (
+                  <div className="flex flex-col h-full">
+                    {(() => {
+                      let tabs: { label: string; layout: string; content?: string; icon?: string; customIconUrl?: string }[] = []
+                      try { tabs = JSON.parse(w.content || "[]") } catch { tabs = [] }
+                      const currentSubTabLabel = activeSubTab[w.key]
+                      const activeTab = tabs.find(t => t.label === currentSubTabLabel)
+
+                      if (activeTab) {
+                        return (
+                          <>
+                            <div className={`flex items-center gap-2 px-4 py-2 border-b flex-none ${theme === 'dark' ? 'border-white/10' : 'border-gray-200'}`}>
+                              <button
+                                onClick={() => {
+                                  focusWindow(w.key)
+                                  const next = { ...activeSubTab }
+                                  delete next[w.key]
+                                  setActiveSubTab(next)
+                                }}
+                                className={`text-sm hover:underline ${theme === 'dark' ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-800'}`}
+                              >
+                                ← {tabs.indexOf(activeTab) + 1}. {activeTab.label}
+                              </button>
+                            </div>
+                            <div className="flex-1 overflow-auto">
+                              {activeTab.layout === "gallery" ? (
+                                <div className="p-6 h-full">
+                                  <ArtGallery
+                                    projects={projects
+                                      .filter((p) => p.isActive && p.customTabKey === w.key)
+                                      .sort((a, b) => a.orderIndex - b.orderIndex)
+                                    }
+                                  />
+                                </div>
+                              ) : activeTab.layout === "projects" ? (
+                                <div className="p-6">
+                                  <div className="grid grid-cols-1 gap-6">
+                                    {projects
+                                      .filter((p) => p.isActive && p.customTabKey === w.key)
+                                      .sort((a, b) => a.orderIndex - b.orderIndex)
+                                      .map((project) => (
+                                        <div key={project.id} className={`backdrop-blur-sm border rounded-lg p-4 mb-4 ${theme === 'dark' ? 'bg-gray-800/50 border-white/10' : 'bg-white/50 border-white/30'}`}>
+                                          <div className="flex gap-4">
+                                            <div className="w-32 h-32 flex-shrink-0">
+                                              <img src={project.imageUrl || "/placeholder.jpg"} alt={project.title} className="w-full h-full object-cover rounded border" />
+                                            </div>
+                                            <div className="flex-1">
+                                              <h4 className={`font-bold text-lg mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>{project.title}</h4>
+                                              <p className={`text-sm mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>{project.description}</p>
+                                              {project.projectLink && (
+                                                <div className="mb-3">
+                                                  <a href={project.projectLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-sm underline">🔗 View Project</a>
+                                                </div>
+                                              )}
+                                              {project.keywords && project.keywords.length > 0 && (
+                                                <div className="mb-3">
+                                                  <p className={`text-xs mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Keywords:</p>
+                                                  <div className="flex flex-wrap gap-1">
+                                                    {project.keywords.map((keyword, idx) => (
+                                                      <span key={idx} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">{keyword}</span>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              <div className="flex flex-wrap gap-2">
+                                                {project.tags.map((tag, idx) => (
+                                                  <span key={idx} className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">{tag}</span>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    {projects.filter((p) => p.isActive && p.customTabKey === w.key).length === 0 && (
+                                      <div className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'} italic`}>No projects available.</div>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : activeTab.layout === "faq" ? (
+                                <div className="p-6">
+                                  <FaqAccordion items={faqItems.filter((item) => item.customTabKey === w.key)} />
+                                </div>
+                              ) : (
+                                <div className={`p-6 text-sm space-y-3 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  {activeTab.content ? (
+                                    <div dangerouslySetInnerHTML={{ __html: formatText(activeTab.content) }} />
+                                  ) : (
+                                    <p className={`italic ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>No content set yet for this sub-tab.</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )
+                      }
+
+                      return (
+                        <div className="flex-1 overflow-auto p-6">
+                          {tabs.length === 0 ? (
+                            <p className={`italic ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>No sub-tabs configured.</p>
+                          ) : (
+                            <div className="grid grid-cols-3 gap-6 auto-rows-max">
+                              {tabs.map(tab => (
+                                <button
+                                  key={tab.label}
+                                  onClick={() => {
+                                    focusWindow(w.key)
+                                    setActiveSubTab(prev => ({ ...prev, [w.key]: tab.label }))
+                                  }}
+                                  className="flex flex-col items-center p-2 rounded-lg hover:bg-white/10 transition-all duration-200"
+                                >
+                                  <div className={`w-12 h-12 rounded-xl ${theme === 'dark' ? 'bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20' : 'bg-white/40 backdrop-blur-md border border-gray-200/50 hover:bg-white/60'} flex items-center justify-center shadow-lg mb-2 hover:scale-105 transition-all duration-200`}
+                                    style={{ boxShadow: '0 4px 12px 0 rgba(31, 38, 135, 0.15)' }}>
+                                    {tab.customIconUrl ? (
+                                      <img src={tab.customIconUrl} alt={tab.label} className="w-6 h-6 object-contain" />
+                                    ) : (
+                                      <span className={`text-xs font-bold drop-shadow-sm ${theme === 'dark' ? 'text-white' : 'text-gray-700'}`}>{tab.label[0]?.toUpperCase() || '?'}</span>
+                                    )}
+                                  </div>
+                                  <span className={`text-xs text-center font-medium max-w-16 leading-tight drop-shadow-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    {tab.label}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                ) : w.layout === "gallery" ? (
                   <div className="p-6 h-full overflow-hidden flex flex-col">
                     <div className="flex items-center mb-6 flex-none">
                       {w.customIconUrl ? (

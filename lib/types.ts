@@ -58,8 +58,16 @@ export interface FaqItem {
 // Window Configuration Types
 // ============================================================================
 
-export type WindowLayout = 'content' | 'projects' | 'faq' | 'gallery';
+export type WindowLayout = 'content' | 'projects' | 'faq' | 'gallery' | 'tabs';
 export type WindowType = 'builtIn' | 'custom';
+
+export interface SubTab {
+    label: string;
+    layout: WindowLayout;
+    content?: string;
+    icon?: string;
+    customIconUrl?: string;
+}
 
 export interface WindowConfig {
     id: number;

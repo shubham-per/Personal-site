@@ -48,6 +48,17 @@ export function ArtGallery({ projects }: ArtGalleryProps) {
         return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
     }
 
+    // Check if URL is a Google Drive link
+    const isGoogleDrive = (url: string) => {
+        return url.match(/drive\.google\.com\/file\/d\//)
+    }
+
+    // Extract Google Drive file ID
+    const getGoogleDriveId = (url: string): string | null => {
+        const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)\//)
+        return match ? match[1] : null
+    }
+
     const getMediaUrl = (project: Project) => {
         return project.imageUrl || (project.photos && project.photos.length > 0 ? project.photos[0] : "")
     }
@@ -104,6 +115,20 @@ export function ArtGallery({ projects }: ArtGalleryProps) {
                                         <div className="bg-red-600 rounded-full p-3">
                                             <Play className="h-8 w-8 fill-white text-white" />
                                         </div>
+                                    </div>
+                                </div>
+                            ) : isGoogleDrive(url) ? (
+                                <div className="flex h-full w-full items-center justify-center bg-gray-900">
+                                    <div className="flex flex-col items-center gap-2 opacity-80">
+                                        <svg viewBox="0 0 87.3 78" className="w-12 h-12" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                                            <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a7.2 7.2 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                                            <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5l-13.75.1-20.5 20.5z" fill="#ea4335"/>
+                                            <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#4285f4"/>
+                                            <path d="m59.8 44.5-16.15-16.15-20.5 20.45h36.65z" fill="#ffba00"/>
+                                            <path d="m73.4 44.5-13.6-23.7-16.15 16.15z" fill="#ffba00"/>
+                                        </svg>
+                                        <span className="text-white/70 text-xs font-medium">Google Drive</span>
                                     </div>
                                 </div>
                             ) : isVid ? (
@@ -212,6 +237,17 @@ export function ArtGallery({ projects }: ArtGalleryProps) {
                                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                                 allowFullScreen
                                             />
+                                        </div>
+                                    ) : isGoogleDrive(url) && getGoogleDriveId(url) ? (
+                                        <div className="w-[90vw] max-w-6xl aspect-video">
+                                            <video
+                                                controls
+                                                autoPlay
+                                                playsInline
+                                                className="w-full h-full rounded shadow-lg"
+                                            >
+                                                <source src={`https://drive.usercontent.google.com/download?id=${getGoogleDriveId(url)}`} />
+                                            </video>
                                         </div>
                                     ) : isVid ? (
                                         <video

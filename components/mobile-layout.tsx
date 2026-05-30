@@ -35,7 +35,7 @@ interface WindowConfig {
   content?: string
   icon?: string
   customIconUrl?: string
-  layout?: "content" | "projects" | "faq" | "gallery"
+  layout?: "content" | "projects" | "faq" | "gallery" | "tabs"
 }
 
 interface BackgroundStyle {
@@ -72,6 +72,9 @@ interface MobileLayoutProps {
   windows: WindowConfig[]
   background: BackgroundConfig | null
   contactLinks: ContactLink[]
+  activeSubTab: Record<string, string>
+  setActiveSubTab: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  setActiveWindow: React.Dispatch<React.SetStateAction<string>>
 }
 
 export default function MobileLayout({
@@ -82,16 +85,21 @@ export default function MobileLayout({
   faqItems,
   windows,
   background,
-  contactLinks
+  contactLinks,
+  activeSubTab,
+  setActiveSubTab,
+  setActiveWindow,
 }: MobileLayoutProps) {
   const [activeSection, setActiveSection] = useState<string | null>(null)
 
   const handleIconClick = (section: string) => {
     setActiveSection(section)
+    setActiveWindow(section)
   }
 
   const handleBack = () => {
     setActiveSection(null)
+    setActiveWindow("home")
   }
 
   const getProjectsByCategory = (category: "engineering" | "games" | "art") => {
@@ -407,7 +415,110 @@ export default function MobileLayout({
                       <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">{w.label}</h2>
                     </div>
 
-                    {w.layout === 'gallery' ? (
+                    {w.layout === 'tabs' ? (
+                      <div className="flex flex-col">
+                        {(() => {
+                          let tabs: { label: string; layout: string; content?: string; icon?: string; customIconUrl?: string }[] = []
+                          try { tabs = JSON.parse(w.content || "[]") } catch { tabs = [] }
+                          const currentSubTabLabel = activeSubTab[w.key]
+                          const activeTab = tabs.find(t => t.label === currentSubTabLabel)
+
+                          if (activeTab) {
+                            return (
+                              <>
+                                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
+                                  <button
+                                    onClick={() => {
+                                      setActiveWindow(w.key)
+                                      const next = { ...activeSubTab }
+                                      delete next[w.key]
+                                      setActiveSubTab(next)
+                                    }}
+                                    className="text-sm text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+                                  >
+                                    ← {activeTab.label}
+                                  </button>
+                                </div>
+                                {activeTab.layout === 'gallery' ? (
+                                  <ArtGallery
+                                    projects={projects
+                                      .filter((p) => p.isActive && p.customTabKey === w.key)
+                                      .sort((a, b) => a.orderIndex - b.orderIndex)
+                                    }
+                                  />
+                                ) : activeTab.layout === 'projects' ? (
+                                  <div className="space-y-4">
+                                    {projects.filter((p) => p.isActive && p.customTabKey === w.key).map((project) => (
+                                      <div key={project.id} className="bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm border border-white/30 rounded-lg p-4">
+                                        {project.imageUrl && (
+                                          <div className="mb-3 rounded-lg overflow-hidden">
+                                            <img src={project.imageUrl} alt={project.title} className="w-full h-40 object-cover" />
+                                          </div>
+                                        )}
+                                        <h4 className="font-bold text-lg mb-2 text-gray-800 dark:text-gray-100">{project.title}</h4>
+                                        <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">{project.description}</p>
+                                        {project.projectLink && (
+                                          <div className="mb-3">
+                                            <a href={project.projectLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-sm underline">🔗 View Project</a>
+                                          </div>
+                                        )}
+                                        <div className="flex flex-wrap gap-2">
+                                          {project.tags.map((tag, index) => (
+                                            <span key={index} className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">{tag}</span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {projects.filter((p) => p.isActive && p.customTabKey === w.key).length === 0 && (
+                                      <div className="text-gray-500 italic">No projects available.</div>
+                                    )}
+                                  </div>
+                                ) : activeTab.layout === 'faq' ? (
+                                  <div className="space-y-4">
+                                    <FaqAccordion items={faqItems.filter((item) => item.customTabKey === w.key)} />
+                                  </div>
+                                ) : (
+                                  <div className="text-sm text-gray-700 dark:text-gray-200" dangerouslySetInnerHTML={{ __html: formatText(activeTab.content || "") }} />
+                                )}
+                              </>
+                            )
+                          }
+
+                          return (
+                            <div>
+                              {tabs.length === 0 ? (
+                                <p className="text-gray-500 italic">No sub-tabs configured.</p>
+                              ) : (
+                                  <div className="grid grid-cols-3 gap-4">
+                                    {tabs.map(tab => (
+                                      <button
+                                        key={tab.label}
+                                        onClick={() => {
+                                          setActiveWindow(w.key)
+                                          setActiveSubTab(prev => ({ ...prev, [w.key]: tab.label }))
+                                        }}
+                                        className="flex flex-col items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-all duration-200"
+                                      >
+                                        <div className="w-12 h-12 rounded-xl bg-white/40 backdrop-blur-md border border-gray-200/50 flex items-center justify-center shadow-lg mb-2 hover:scale-105 transition-all duration-200 dark:bg-white/10 dark:border-white/20"
+                                          style={{ boxShadow: '0 4px 12px 0 rgba(31, 38, 135, 0.15)' }}>
+                                          {tab.customIconUrl ? (
+                                            <img src={tab.customIconUrl} alt={tab.label} className="w-6 h-6 object-contain" />
+                                          ) : (
+                                            <span className="text-xs font-bold text-gray-700 drop-shadow-sm dark:text-white">{tab.label[0]?.toUpperCase() || '?'}</span>
+                                          )}
+                                        </div>
+                                        <span className="text-xs text-center font-medium max-w-16 leading-tight drop-shadow-sm text-gray-600 dark:text-gray-300">
+                                          {tab.label}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    ) : w.layout === 'gallery' ? (
                       <ArtGallery
                         projects={projects
                           .filter((p) => p.isActive && p.customTabKey === w.key)

@@ -36,7 +36,7 @@ import {
   FolderOpen,
 } from "lucide-react"
 import { deriveDefaultIcon } from "@/lib/icon-utils"
-import { SiteConfig } from "@/lib/types"
+import { SiteConfig, WindowLayout } from "@/lib/types"
 
 interface Project {
   id: number
@@ -105,7 +105,7 @@ interface WindowConfig {
   content?: string
   icon?: string
   customIconUrl?: string
-  layout?: "content" | "projects" | "faq" | "gallery"
+  layout?: "content" | "projects" | "faq" | "gallery" | "tabs"
   isArchived?: boolean
 }
 
@@ -1702,7 +1702,7 @@ function ContentForm({
           required
         />
         <p className="text-xs text-gray-500 mt-1">
-          Supports rich text: **bold**, *italic*, [link](url), and lists (- item).
+          Supports: **bold**, *italic*, [link](url), [colored text](#ff0000), bullet lists (- item), and paragraphs (blank line).
         </p>
       </div>
 
@@ -1757,7 +1757,7 @@ function FaqForm({
           required
         />
         <p className="text-xs text-gray-500 mt-1">
-          Supports rich text: **bold**, *italic*, [link](url), and lists (- item).
+          Supports: **bold**, *italic*, [link](url), [colored text](#ff0000), bullet lists (- item), and paragraphs (blank line).
         </p>
       </div>
 
@@ -2616,6 +2616,22 @@ function WindowsManager({
                     Move to archive
                   </label>
                 </div>
+                <div className="flex gap-3 mt-2">
+                  <div>
+                    <Label className="text-xs">Layout</Label>
+                    <select
+                      value={w.layout || "content"}
+                      onChange={(e) => updateWindowLocal(w.id, { layout: e.target.value as WindowLayout })}
+                      className="h-8 text-xs border rounded px-2 bg-white"
+                    >
+                      <option value="content">Content</option>
+                      <option value="projects">Projects</option>
+                      <option value="gallery">Gallery</option>
+                      <option value="faq">FAQ</option>
+                      <option value="tabs">Tabbed</option>
+                    </select>
+                  </div>
+                </div>
               </div>
               <div className="flex items-center gap-3 text-xs">
                 <div>
@@ -2674,15 +2690,17 @@ function CustomPanelEditor({
   const [customFaqItems, setCustomFaqItems] = useState<FaqItem[]>([])
   const [editingCustomFaq, setEditingCustomFaq] = useState<FaqItem | null>(null)
   const [isCustomFaqDialogOpen, setIsCustomFaqDialogOpen] = useState(false)
+  const [subTabIconFiles, setSubTabIconFiles] = useState<Record<number, File>>({})
+  const [subTabIconUploading, setSubTabIconUploading] = useState<Record<number, boolean>>({})
 
   useEffect(() => {
     setFormData(window)
     // Load custom projects for this tab if layout is projects or gallery
-    if (window.layout === "projects" || window.layout === "gallery") {
+    if (window.layout === "projects" || window.layout === "gallery" || window.layout === "tabs") {
       loadCustomProjects()
     }
-    // Load custom FAQ items for this tab if layout is faq
-    if (window.layout === "faq") {
+    // Load custom FAQ items for this tab if layout is faq or tabs (sub-tabs may use faq)
+    if (window.layout === "faq" || window.layout === "tabs") {
       loadCustomFaqItems()
     }
   }, [window])
@@ -2820,6 +2838,26 @@ function CustomPanelEditor({
     }
   }
 
+  const handleSubTabIconUpload = async (index: number, file: File) => {
+    setSubTabIconUploading(prev => ({ ...prev, [index]: true }))
+    try {
+      const formDataObj = new FormData()
+      formDataObj.append("image", file)
+      const res = await fetch("/api/upload", { method: "POST", body: formDataObj })
+      if (!res.ok) throw new Error("Upload failed")
+      const data = await res.json()
+      const tabs = formData.content ? JSON.parse(formData.content) : []
+      const newTabs = [...tabs]
+      newTabs[index] = { ...newTabs[index], customIconUrl: data.url }
+      setFormData({ ...formData, content: JSON.stringify(newTabs) })
+      setSubTabIconFiles(prev => { const n = { ...prev }; delete n[index]; return n })
+    } catch {
+      alert("Failed to upload icon")
+    } finally {
+      setSubTabIconUploading(prev => ({ ...prev, [index]: false }))
+    }
+  }
+
   const handleDeleteCustomFaq = async (id: number) => {
     if (!confirm("Delete this FAQ item?")) return
     try {
@@ -2897,22 +2935,23 @@ function CustomPanelEditor({
 
         <div>
           <Label>Layout Type</Label>
-          <Select
-            value={formData.layout || "content"}
-            onValueChange={(value: "content" | "projects" | "faq") =>
-              setFormData({ ...formData, layout: value })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="content">Simple Content (like About)</SelectItem>
-              <SelectItem value="projects">Projects List (like Engineering/Games)</SelectItem>
-              <SelectItem value="gallery">Gallery Style (like Art)</SelectItem>
-              <SelectItem value="faq">FAQ Style</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select
+                value={formData.layout || "content"}
+                onValueChange={(value: "content" | "projects" | "faq" | "gallery" | "tabs") =>
+                  setFormData({ ...formData, layout: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="content">Simple Content (like About)</SelectItem>
+                  <SelectItem value="projects">Projects List (like Engineering/Games)</SelectItem>
+                  <SelectItem value="gallery">Gallery Style (like Art)</SelectItem>
+                  <SelectItem value="faq">FAQ Style</SelectItem>
+                  <SelectItem value="tabs">Tabbed (sub-tabs inside window)</SelectItem>
+                </SelectContent>
+              </Select>
         </div>
 
         <div>
@@ -2971,7 +3010,254 @@ function CustomPanelEditor({
           </div>
         </div>
 
-        {(formData.layout === "projects" || formData.layout === "gallery") ? (
+        {formData.layout === "tabs" ? (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <Label className="text-lg font-semibold">Sub-Tabs</Label>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const tabs = formData.content ? JSON.parse(formData.content) : []
+                  setFormData({
+                    ...formData,
+                    content: JSON.stringify([...tabs, { label: "New Tab", layout: "content", content: "", icon: "", customIconUrl: "" }]),
+                  })
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Sub-Tab
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {(() => {
+                const tabs = formData.content ? (() => { try { return JSON.parse(formData.content) } catch { return [] } })() : []
+                if (tabs.length === 0) {
+                  return <p className="text-sm text-gray-500">No sub-tabs yet. Click "Add Sub-Tab" to get started.</p>
+                }
+                return tabs.map((tab: any, index: number) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-3 bg-gray-50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-medium text-gray-700 w-6">{index + 1}.</span>
+                      <Input
+                        value={tab.label}
+                        onChange={(e) => {
+                          const newTabs = [...tabs]
+                          newTabs[index] = { ...newTabs[index], label: e.target.value }
+                          setFormData({ ...formData, content: JSON.stringify(newTabs) })
+                        }}
+                        placeholder="Tab label"
+                        className="flex-1"
+                      />
+                      <Select
+                        value={tab.layout || "content"}
+                        onValueChange={(value) => {
+                          const newTabs = [...tabs]
+                          newTabs[index] = { ...newTabs[index], layout: value }
+                          setFormData({ ...formData, content: JSON.stringify(newTabs) })
+                        }}
+                      >
+                        <SelectTrigger className="w-40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="content">Content</SelectItem>
+                          <SelectItem value="projects">Projects</SelectItem>
+                          <SelectItem value="gallery">Gallery</SelectItem>
+                          <SelectItem value="faq">FAQ</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => {
+                          const newTabs = tabs.filter((_: any, i: number) => i !== index)
+                          setFormData({ ...formData, content: JSON.stringify(newTabs) })
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <div className="w-6 flex-none" />
+                      <Input
+                        value={tab.customIconUrl || ""}
+                        onChange={(e) => {
+                          const newTabs = [...tabs]
+                          newTabs[index] = { ...newTabs[index], customIconUrl: e.target.value }
+                          setFormData({ ...formData, content: JSON.stringify(newTabs) })
+                        }}
+                        placeholder="Icon URL (optional)"
+                        className="flex-1 h-8 text-xs"
+                      />
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            setSubTabIconFiles(prev => ({ ...prev, [index]: file }))
+                            handleSubTabIconUpload(index, file)
+                          }
+                        }}
+                        className="h-8 text-xs py-1 max-w-40"
+                      />
+                      {subTabIconUploading[index] && (
+                        <span className="text-xs text-gray-500">Uploading...</span>
+                      )}
+                      {tab.customIconUrl && !subTabIconFiles[index] && (
+                        <div className="w-8 h-8 border rounded overflow-hidden bg-gray-50 flex-none">
+                          <img src={tab.customIconUrl} alt="" className="w-full h-full object-contain" />
+                        </div>
+                      )}
+                    </div>
+                    {tab.layout === "content" && (
+                      <Textarea
+                        value={tab.content || ""}
+                        onChange={(e) => {
+                          const newTabs = [...tabs]
+                          newTabs[index] = { ...newTabs[index], content: e.target.value }
+                          setFormData({ ...formData, content: JSON.stringify(newTabs) })
+                        }}
+                        rows={4}
+                        placeholder="Enter content for this sub-tab..."
+                      />
+                    )}
+                    <p className="text-xs text-gray-500">
+                      Supports: **bold**, *italic*, [link](url), [colored text](#ff0000), bullet lists (- item), and paragraphs (blank line).
+                    </p>
+                  </div>
+                ))
+              })()}
+            </div>
+
+            {/* Projects/Gallery management for sub-tabs */}
+            <div className="mt-8 pt-6 border-t">
+              <div className="flex justify-between items-center mb-4">
+                <Label className="text-lg font-semibold">Projects (shared across sub-tabs)</Label>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditingCustomProject({
+                      id: 0,
+                      title: "",
+                      description: "",
+                      category: "engineering",
+                      photos: [],
+                      keywords: [],
+                      projectLink: "",
+                      tags: [],
+                      order_index: customProjects.length + 1,
+                      is_active: true,
+                      customTabKey: window.key,
+                    })
+                    setIsCustomProjectDialogOpen(true)
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Project
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {customProjects.length === 0 ? (
+                  <p className="text-sm text-gray-500 col-span-full">No projects yet. Click "Add Project" to get started.</p>
+                ) : (
+                  customProjects.map((project) => (
+                    <Card key={project.id}>
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">{project.title}</CardTitle>
+                            <Badge variant="secondary" className="mt-1">
+                              {formData.label}
+                            </Badge>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 mb-4 line-clamp-2">{project.description}</p>
+                        <div className="flex flex-wrap gap-1 mb-4">
+                          {project.tags.map((tag, index) => (
+                            <Badge key={index} variant="outline" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setEditingCustomProject(project)
+                              setIsCustomProjectDialogOpen(true)
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleDeleteCustomProject(project.id)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* FAQ management for sub-tabs */}
+            <div className="mt-8 pt-6 border-t">
+              <div className="flex justify-between items-center mb-4">
+                <Label className="text-lg font-semibold">FAQ Items (shared across sub-tabs)</Label>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditingCustomFaq({
+                      id: 0,
+                      question: "",
+                      answer: "",
+                      order: customFaqItems.length + 1,
+                      isActive: true,
+                      customTabKey: window.key,
+                    })
+                    setIsCustomFaqDialogOpen(true)
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add FAQ Item
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 gap-6">
+                {customFaqItems.length === 0 ? (
+                  <p className="text-sm text-gray-500 col-span-full">No FAQ items yet. Click "Add FAQ Item" to get started.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {customFaqItems.map((item) => (
+                      <div key={item.id} className="group relative">
+                        <div className="pr-20">
+                          <FaqAccordion items={[item]} />
+                        </div>
+                        <div className="absolute top-4 right-2 flex gap-2 opacity-100 transition-opacity">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setEditingCustomFaq(item)
+                              setIsCustomFaqDialogOpen(true)
+                            }}
+                          >
+                            <Edit className="w-3 h-3" />
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleDeleteCustomFaq(item.id)}>
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (formData.layout === "projects" || formData.layout === "gallery") ? (
           // Projects/Gallery Layout - Show project management interface
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -3109,7 +3395,7 @@ function CustomPanelEditor({
               placeholder="Enter content for this panel..."
             />
             <p className="text-xs text-gray-500 mt-1">
-              Supports rich text: **bold**, *italic*, [link](url), [text](#color), and lists (- item).
+              Supports: **bold**, *italic*, [link](url), [colored text](#ff0000), bullet lists (- item), and paragraphs (blank line).
             </p>
           </div>
         )}
