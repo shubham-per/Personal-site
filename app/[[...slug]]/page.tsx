@@ -91,6 +91,7 @@ export default function Page() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
   const [loadingProgress, setLoadingProgress] = useState(0)
+  const [bootStage, setBootStage] = useState<'bios' | 'windows'>('bios')
   const initialUrlSynced = useRef(false)
 
   // Load theme preference on mount
@@ -143,6 +144,14 @@ export default function Page() {
         if (bgRes.ok) {
           const bgData = await bgRes.json()
           setBackground(bgData)
+
+          // Preload background image so it's ready by the time BIOS ends
+          const bg = bgData.desktop
+          if (bg.type === 'image' && bg.imageUrl) {
+            const img = new Image()
+            img.src = bg.imageUrl
+            await img.decode()
+          }
         }
         setLoadingProgress(20)
 
@@ -208,6 +217,13 @@ export default function Page() {
     loadContent()
   }, [])
 
+  // Boot sequence: BIOS text → Windows loading screen
+  useEffect(() => {
+    if (!loading) return
+    const t1 = setTimeout(() => setBootStage('windows'), 1500)
+    return () => clearTimeout(t1)
+  }, [loading])
+
   // Open window based on initial URL slug
   useEffect(() => {
     const path = window.location.pathname
@@ -236,6 +252,14 @@ export default function Page() {
         const parts = slug.split("/")
         const windowKey = parts[0]
         const subTabLabel = parts[1]
+
+        // Archived windows should not open via URL
+        const windowConfig = windows.find(w => w.key === windowKey)
+        if (windowConfig?.isArchived) {
+          setActiveWindow("home")
+          return
+        }
+
         setOpenWindows((prev) => prev.includes(windowKey) ? prev : [...prev, windowKey])
         setActiveWindow(windowKey)
         setActiveSubTab((prev) => {
@@ -251,11 +275,30 @@ export default function Page() {
     }
     window.addEventListener("popstate", handlePopState)
     return () => window.removeEventListener("popstate", handlePopState)
-  }, [])
+  }, [windows])
+
+  // Validate active window is not archived (after windows config loads)
+  useEffect(() => {
+    if (windows.length === 0) return
+    if (activeWindow && activeWindow !== "home") {
+      const windowConfig = windows.find(w => w.key === activeWindow)
+      if (windowConfig?.isArchived) {
+        setActiveWindow("home")
+        setOpenWindows(prev => prev.filter(id => id !== activeWindow))
+      }
+    }
+  }, [windows, activeWindow])
 
   // Sync URL to activeWindow and activeSubTab after React commit
   useEffect(() => {
     if (!initialUrlSynced.current) return
+
+    // Archived windows should not have a URL
+    if (activeWindow && activeWindow !== "home") {
+      const windowConfig = windows.find(w => w.key === activeWindow)
+      if (windowConfig?.isArchived) return
+    }
+
     const subTabLabel = activeWindow ? activeSubTab[activeWindow] : undefined
     let path = "/"
     if (activeWindow && activeWindow !== "home") {
@@ -265,7 +308,7 @@ export default function Page() {
       }
     }
     History.prototype.replaceState.call(window.history, null, "", path)
-  }, [activeWindow, activeSubTab])
+  }, [activeWindow, activeSubTab, windows])
 
   // Inject SEO meta tags dynamically based on project keywords
   useEffect(() => {
@@ -440,35 +483,75 @@ export default function Page() {
   /* renderIcon removed - using WindowIcon component */
 
   if (loading || !background || windows.length === 0) {
-    // Generate temporary background props if background isn't loaded yet
-    const loadingBgProps = background ? getBackgroundClass() : {
-      // Default fallback while fetching background
-      style: { background: 'linear-gradient(to bottom, #1e293b, #0f172a)' } as React.CSSProperties,
-      className: ""
-    }
-
     return (
-      <div
-        className={`h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden ${loadingBgProps.className}`}
-        style={loadingBgProps.style}
-      >
-        {/* Dark Overlay for Loading Screen */}
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-md z-0" />
-
-        <div className="relative z-10 w-64 md:w-80 flex flex-col items-center gap-4">
-          <div className="text-white text-xl font-light tracking-widest uppercase">Loading</div>
-
-          {/* Progress Bar Container */}
-          <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden backdrop-blur-sm">
-            {/* Progress Bar Fill */}
-            <div
-              className="h-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)] transition-all duration-300 ease-out"
-              style={{ width: `${loadingProgress}%` }}
-            />
+      <div className="h-screen w-screen overflow-hidden relative">
+        {/* BIOS Stage */}
+        {bootStage === 'bios' && (
+          <div className="absolute inset-0 bg-black flex flex-col items-center justify-center">
+            <div className="font-mono text-sm text-amber-400/80 space-y-1.5 animate-pulse" style={{ animationDuration: '1.5s' }}>
+              <p className="text-center text-amber-500/60 text-xs mb-4">PhoenixBIOS 4.0 Release 6.1</p>
+              <p className="text-amber-500/60">CPU: Intel(R) Pentium(R) 4</p>
+              <p className="text-amber-500/60">Memory Test: 524288K OK</p>
+              <p className="text-amber-500/60">IDE Primary Master: WDC WD800BB-00JHC0</p>
+              <p className="text-amber-500/60">Verifying DMI Pool Data ........</p>
+              <p className="text-green-400/80 mt-4 ml-4">Starting Windows...</p>
+            </div>
           </div>
+        )}
 
-          <div className="text-white/60 text-xs font-mono">{loadingProgress}%</div>
-        </div>
+        {/* Windows XP Boot Screen */}
+        {bootStage === 'windows' && (
+          <div
+            className="absolute inset-0"
+            style={(() => {
+              const bg = background?.desktop
+              if (!bg) return { backgroundColor: '#007b' }
+              if (bg.type === 'image' && bg.imageUrl) {
+                return { backgroundImage: `url(${bg.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+              }
+              if (bg.type === 'gradient') {
+                const from = bg.from || '#60a5fa'
+                const via = bg.via || '#3b82f6'
+                const to = bg.to || '#2563eb'
+                return { backgroundImage: `linear-gradient(to bottom, ${from}, ${via}, ${to})` }
+              }
+              return { backgroundColor: bg.color || '#007b' }
+            })()}
+          >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-xl" />
+            <div className="relative z-10 flex flex-col items-center justify-center h-full">
+              {/* Windows logo */}
+              <div className="relative mb-12">
+                <div className="text-white font-bold text-5xl tracking-wide flex items-center gap-1">
+                  <span className="text-red-400">Mi</span>
+                  <span className="text-green-400">cr</span>
+                  <span className="text-yellow-400">os</span>
+                  <span className="text-blue-400">of</span>
+                  <span className="text-red-400">t</span>
+                </div>
+                <div className="text-white/80 text-lg font-light tracking-widest text-center mt-1">
+                  Windows XP
+                </div>
+              </div>
+
+              {/* Marquee-style progress bar */}
+              <div className="w-64 relative">
+                <div className="h-0.5 bg-white/30">
+                  <div
+                    className="h-full bg-white transition-none"
+                    style={{
+                      width: `${loadingProgress}%`,
+                      boxShadow: '0 0 6px rgba(255,255,255,0.6)',
+                    }}
+                  />
+                </div>
+              </div>
+              {loadingProgress < 100 && (
+                <div className="text-white/50 text-xs font-mono mt-2">Please wait while I load my life...</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
